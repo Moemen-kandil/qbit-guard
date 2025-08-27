@@ -141,7 +141,7 @@ For users who prefer the traditional webhook approach or need to customize the d
 
 1. **Download and make executable**:
    ```bash
-   curl -o /config/scripts/qbit-guard.py https://raw.githubusercontent.com/GEngines/qbit-guard/main/qbit-guard.py
+   curl -o /config/scripts/qbit-guard.py https://raw.githubusercontent.com/GEngines/qbit-guard/main/src/guard.py
    chmod +x /config/scripts/qbit-guard.py
    ```
 
