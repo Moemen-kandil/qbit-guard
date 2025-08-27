@@ -1,39 +1,79 @@
-version: '3.8' # Updated to a more recent version
 services:
-  app:
-    image: myapp:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
+  qbittorrent:
+    image: "linuxserver/qbittorrent"
+    container_name: qbittorrent
     ports:
-      - "80:80"
+      - "8080:8080"
     environment:
-      - DB_HOST=db
-      - DB_USER=user
-      - DB_PASS=supersecret
-    # Warning: Avoid using default credentials in production
+      - WEBUI_PORT=8080
+      - PUID=1000
+      - PGID=1000
+      - UMASK=002
+      - QBITTORRENT_WEBUI_ADMIN_USER=admin
+      - QBITTORRENT_WEBUI_ADMIN_PASS=yourpassword
+    volumes:
+      - ./qbittorrent/config:/config
+      - ./downloads:/downloads
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
     deploy:
       resources:
         limits:
           cpus: '0.5'
           memory: 512M
-    # Extension Policy Configuration
-    extension: 
-      enabled: true
 
-  db:
-    image: mysql:5.7
-    restart: always
+  sonarr:
+    image: "sonarr/sonarr:latest"
+    container_name: sonarr
+    ports:
+      - "8989:8989"
     environment:
-      MYSQL_ROOT_PASSWORD: rootpassword
-      MYSQL_DATABASE: mydatabase
-      MYSQL_USER: user
-      MYSQL_PASSWORD: supersecret
+      - PUID=1000
+      - PGID=1000
+      - SONARR_URL=http://sonarr:8989
     volumes:
-      - db_data:/var/lib/mysql
+      - ./sonarr/config:/config
+      - ./downloads:/downloads
+      - ./tv:/tv
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8989"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
 
-volumes:
-  db_data: 
+  radarr:
+    image: "radarr/radarr:latest"
+    container_name: radarr
+    ports:
+      - "7878:7878"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - RADARR_URL=http://radarr:7878
+    volumes:
+      - ./radarr/config:/config
+      - ./downloads:/downloads
+      - ./movies:/movies
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7878"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
 
-# Additional documentation and organization
-# This is a production-ready configuration with improved security practices and resource limits.
+networks:
+  default:
+    external:
+      name: my_network
