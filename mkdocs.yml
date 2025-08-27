@@ -17,7 +17,7 @@ nav:
       - Install: usage/install.md
       - Configure: usage/configure.md
       - Environment Vars: usage/env.md
-  - Development: dev.md
+      - Development: usage/dev.md
 
 markdown_extensions:
   - admonition
