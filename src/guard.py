@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-qbit-guard.py
+guard.py
 
 Guard for qBittorrent 5.x:
 
