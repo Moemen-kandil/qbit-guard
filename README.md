@@ -62,6 +62,71 @@ A zero-dependency Python guard for qBittorrent that provides intelligent torrent
 
 ## Installation
 
+qbit-guard can be deployed in two ways: as a containerized service (recommended) or as a traditional script. Choose the method that best fits your setup.
+
+### Docker Installation (Recommended)
+
+The containerized version runs as a standalone service that continuously monitors qBittorrent, eliminating the need for webhook configuration.
+
+#### Quick Start
+
+1. **Pull the official image**:
+   ```bash
+   docker pull ghcr.io/gengines/qbit-guard:1.0.0
+   ```
+
+2. **Create a basic docker-compose.yml**:
+   ```yaml
+   version: '3.8'
+   services:
+     qbit-guard:
+       image: ghcr.io/gengines/qbit-guard:1.0.0
+       container_name: qbit-guard
+       restart: unless-stopped
+       environment:
+         - QBIT_HOST=http://qbittorrent:8080
+         - QBIT_USER=admin
+         - QBIT_PASS=your_password
+         - QBIT_ALLOWED_CATEGORIES=tv-sonarr,radarr
+         - ENABLE_PREAIR_CHECK=1
+         - SONARR_URL=http://sonarr:8989
+         - SONARR_APIKEY=your_api_key
+         - LOG_LEVEL=INFO
+       networks:
+         - arr-network
+   
+   networks:
+     arr-network:
+       driver: bridge
+   ```
+
+3. **Start the service**:
+   ```bash
+   docker-compose up -d
+   ```
+
+#### Container Modes
+
+**Polling Mode (Default)**: The container continuously polls qBittorrent's API for new torrents. This is the recommended approach as it:
+- Requires no qBittorrent webhook configuration
+- Works reliably across container restarts
+- Handles network interruptions gracefully
+- Provides better visibility into processing status
+
+**Webhook Mode**: Configure qBittorrent to call the container on torrent add events. This requires:
+- Exposing the container port (`8080:8080`)
+- Configuring qBittorrent's "Run external program" setting to call `http://qbit-guard:8080/webhook`
+- Additional network connectivity setup
+- More complex debugging when issues arise
+
+For most users, polling mode is simpler and more reliable.
+
+> **Note**: A complete working `docker-compose.yml` file is included in the repository root with all configuration options documented.
+
+### Script Installation (Traditional)
+
+For users who prefer the traditional webhook approach or need to customize the deployment:
+
 1. **Download and make executable**:
    ```bash
    curl -o /config/scripts/qbit-guard.py https://raw.githubusercontent.com/GEngines/qbit-guard/main/qbit-guard.py
@@ -175,9 +240,262 @@ RADARR_CATEGORIES="radarr"                   # Categories to apply Radarr blockl
 | `USER_AGENT` | `qbit-guard/2.0` | HTTP User-Agent string |
 | `LOG_LEVEL` | `INFO` | Logging verbosity (`INFO` or `DEBUG`) |
 
+## Docker Deployment
+
+### Container Networking
+
+qbit-guard needs network connectivity to your *arr services and qBittorrent. The container deployment uses polling mode by default, which only requires outbound connections.
+
+#### Network Requirements
+
+- **qBittorrent API**: HTTP access to qBittorrent's Web UI (default port 8080)
+- **Sonarr API**: HTTP access to Sonarr (default port 8989) 
+- **Radarr API**: HTTP access to Radarr (default port 7878)
+- **Internet APIs**: HTTPS access to TVmaze (api.tvmaze.com) and TheTVDB (api4.thetvdb.com) for cross-verification
+
+#### Docker Compose Networking
+
+Create a shared network for all services:
+
+```yaml
+networks:
+  arr-network:
+    driver: bridge
+```
+
+All services (qbit-guard, qbittorrent, sonarr, radarr) should use the same network to enable service discovery by container name.
+
+### Complete Docker Compose Examples
+
+#### Minimal Configuration
+
+Basic setup with essential features only:
+
+```yaml
+version: '3.8'
+
+services:
+  qbit-guard:
+    image: ghcr.io/gengines/qbit-guard:1.0.0
+    container_name: qbit-guard
+    restart: unless-stopped
+    environment:
+      # Essential qBittorrent connection
+      - QBIT_HOST=http://qbittorrent:8080
+      - QBIT_USER=admin
+      - QBIT_PASS=your_password_here
+      - QBIT_ALLOWED_CATEGORIES=tv-sonarr,radarr
+      
+      # Basic pre-air checking with Sonarr
+      - ENABLE_PREAIR_CHECK=1
+      - SONARR_URL=http://sonarr:8989
+      - SONARR_APIKEY=your_sonarr_api_key_here
+      
+      # ISO cleanup
+      - ENABLE_ISO_CHECK=1
+      
+      - LOG_LEVEL=INFO
+    networks:
+      - arr-network
+    depends_on:
+      - qbittorrent
+
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=UTC
+      - WEBUI_PORT=8080
+    volumes:
+      - ./qbittorrent:/config
+      - ./downloads:/downloads
+    ports:
+      - "8080:8080"
+      - "6881:6881"
+      - "6881:6881/udp"
+    restart: unless-stopped
+    networks:
+      - arr-network
+
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=UTC
+    volumes:
+      - ./sonarr:/config
+      - ./downloads:/downloads
+      - ./tv:/tv
+    ports:
+      - "8989:8989"
+    restart: unless-stopped
+    networks:
+      - arr-network
+
+networks:
+  arr-network:
+    driver: bridge
+```
+
+#### Full Configuration
+
+Advanced setup with all features enabled:
+
+```yaml
+version: '3.8'
+
+services:
+  qbit-guard:
+    image: ghcr.io/gengines/qbit-guard:1.0.0
+    container_name: qbit-guard
+    restart: unless-stopped
+    environment:
+      # ===== LOGGING =====
+      - LOG_LEVEL=INFO                                    # DEBUG for troubleshooting
+
+      # ===== qBITTORRENT CONNECTION =====
+      - QBIT_HOST=http://qbittorrent:8080                
+      - QBIT_USER=admin                                   
+      - QBIT_PASS=your_secure_password_here             
+      - QBIT_ALLOWED_CATEGORIES=tv-sonarr,radarr         
+      - QBIT_DELETE_FILES=true                           
+      - QBIT_DRY_RUN=0                                   # Set to 1 for testing
+
+      # ===== POLLING CONFIGURATION =====
+      - WATCH_POLL_SECONDS=3.0                          # How often to check for new torrents
+      - WATCH_PROCESS_EXISTING_AT_START=0                # Process existing torrents on startup
+      - WATCH_RESCAN_KEYWORD=rescan                      # Keyword in category/tags to force reprocess
+
+      # ===== PRE-AIR CHECKING (SONARR) =====
+      - ENABLE_PREAIR_CHECK=1                            
+      - SONARR_URL=http://sonarr:8989                    
+      - SONARR_APIKEY=your_sonarr_api_key_here           
+      - SONARR_CATEGORIES=tv-sonarr                      
+      - EARLY_GRACE_HOURS=6                              # Allow releases 6h before air
+      - EARLY_HARD_LIMIT_HOURS=72                        # Block releases >72h early
+      - WHITELIST_OVERRIDES_HARD_LIMIT=0                 
+      - EARLY_WHITELIST_GROUPS=trusted_group1,trusted_group2
+      - EARLY_WHITELIST_INDEXERS=                        
+      - EARLY_WHITELIST_TRACKERS=                        
+      - RESUME_IF_NO_HISTORY=1                           
+      - SONARR_TIMEOUT_SEC=45                            
+      - SONARR_RETRIES=3                                 
+
+      # ===== INTERNET CROSS-VERIFICATION =====
+      - INTERNET_CHECK_PROVIDER=both                     # off, tvmaze, tvdb, or both
+      - TVMAZE_TIMEOUT_SEC=8                            
+      - TVDB_APIKEY=your_tvdb_api_key_here               # Required for TVDB
+      - TVDB_PIN=your_tvdb_pin                          # Optional
+      - TVDB_TIMEOUT_SEC=8                               
+
+      # ===== ISO/BDMV CLEANUP =====
+      - ENABLE_ISO_CHECK=1                               
+      - MIN_KEEPABLE_VIDEO_MB=50                         # Minimum video file size to keep
+      - METADATA_POLL_INTERVAL=1.5                       
+      - METADATA_MAX_WAIT_SEC=300                        # 5 minute timeout for metadata
+      - METADATA_DOWNLOAD_BUDGET_BYTES=104857600         # 100MB limit for magnet resolution
+
+      # ===== RADARR INTEGRATION =====
+      - RADARR_URL=http://radarr:7878                    
+      - RADARR_APIKEY=your_radarr_api_key_here           
+      - RADARR_CATEGORIES=radarr                         
+      - RADARR_TIMEOUT_SEC=45                            
+      - RADARR_RETRIES=3                                 
+
+    networks:
+      - arr-network
+    depends_on:
+      - qbittorrent
+      - sonarr
+      - radarr
+
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=UTC
+      - WEBUI_PORT=8080
+    volumes:
+      - ./qbittorrent:/config
+      - ./downloads:/downloads
+    ports:
+      - "8080:8080"
+      - "6881:6881"
+      - "6881:6881/udp"
+    restart: unless-stopped
+    networks:
+      - arr-network
+
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=UTC
+    volumes:
+      - ./sonarr:/config
+      - ./downloads:/downloads
+      - ./tv:/tv
+    ports:
+      - "8989:8989"
+    restart: unless-stopped
+    networks:
+      - arr-network
+
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: radarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=UTC
+    volumes:
+      - ./radarr:/config
+      - ./downloads:/downloads
+      - ./movies:/movies
+    ports:
+      - "7878:7878"
+    restart: unless-stopped
+    networks:
+      - arr-network
+
+networks:
+  arr-network:
+    driver: bridge
+```
+
+### Container Environment Variables
+
+The containerized version supports all the same environment variables as the script installation, plus additional polling configuration:
+
+#### Container-Specific Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `WATCH_POLL_SECONDS` | `3.0` | How often to check qBittorrent for new torrents |
+| `WATCH_PROCESS_EXISTING_AT_START` | `0` | Process existing torrents when container starts |
+| `WATCH_RESCAN_KEYWORD` | `rescan` | Keyword in category/tags to force reprocessing |
+
+#### Key Differences from Script Mode
+
+- **No webhook setup required**: Container polls qBittorrent API directly
+- **Persistent monitoring**: Runs continuously instead of per-torrent execution
+- **Graceful restarts**: Remembers processed torrents during container lifecycle
+- **Better logging**: Centralized container logs with structured output
+- **Resource efficient**: Single process handles all torrents
+
 ## Usage Examples
 
-### Docker Compose
+### Legacy Docker Compose (Script Mode)
+
+For reference, here's how qbit-guard was traditionally used with webhook integration (not recommended for new deployments):
 
 ```yaml
 services:
@@ -282,6 +600,127 @@ Set `QBIT_DRY_RUN=1` to test configuration without actually deleting torrents:
 - **Reannounce**: Periodically sends reannounce requests to speed up magnet resolution  
 - **Budget controls**: Optional download limits prevent runaway metadata fetching
 - **Fast stop**: Stops torrent immediately once file list appears
+
+## Container Troubleshooting
+
+### Common Docker Issues
+
+**Container fails to start**
+```bash
+# Check container logs
+docker-compose logs qbit-guard
+
+# Common causes:
+# - Invalid environment variables (check QBIT_HOST, credentials)
+# - Network connectivity issues between containers
+# - Missing required environment variables (SONARR_APIKEY, etc.)
+```
+
+**qbit-guard can't connect to qBittorrent**
+```bash
+# Verify qBittorrent is accessible from qbit-guard container
+docker-compose exec qbit-guard wget -qO- http://qbittorrent:8080/api/v2/app/version
+
+# Check network configuration:
+docker-compose exec qbit-guard nslookup qbittorrent
+
+# Verify credentials and ports match qBittorrent WebUI settings
+```
+
+**No torrents being processed**
+```bash
+# Check if torrents are in allowed categories
+docker-compose exec qbit-guard printenv QBIT_ALLOWED_CATEGORIES
+
+# Enable debug logging for detailed information
+docker-compose up -d --environment LOG_LEVEL=DEBUG qbit-guard
+
+# Verify polling is working
+docker-compose logs -f qbit-guard | grep "Watcher.*started"
+```
+
+**API timeouts with Sonarr/Radarr**
+```bash
+# Test connectivity from container
+docker-compose exec qbit-guard wget -qO- http://sonarr:8989/api/v3/system/status
+
+# Increase timeout values
+- SONARR_TIMEOUT_SEC=90
+- RADARR_TIMEOUT_SEC=90
+
+# Check for DNS resolution issues
+docker-compose exec qbit-guard nslookup sonarr
+```
+
+**Container networking problems**
+```bash
+# Verify all services are on the same network
+docker network inspect $(docker-compose config --volumes)
+
+# Check if services can reach each other
+docker-compose exec qbit-guard ping qbittorrent
+docker-compose exec qbit-guard ping sonarr
+
+# Ensure no conflicting container names
+docker ps -a | grep -E "(qbittorrent|sonarr|radarr|qbit-guard)"
+```
+
+### Container Performance Tuning
+
+**Reduce polling frequency for lower resource usage**
+```yaml
+environment:
+  - WATCH_POLL_SECONDS=10.0  # Check every 10 seconds instead of 3
+```
+
+**Limit metadata download for large magnet torrents**
+```yaml
+environment:
+  - METADATA_MAX_WAIT_SEC=120              # 2 minute timeout
+  - METADATA_DOWNLOAD_BUDGET_BYTES=52428800  # 50MB limit
+```
+
+**Process existing torrents on container start**
+```yaml
+environment:
+  - WATCH_PROCESS_EXISTING_AT_START=1  # Useful after container restarts
+```
+
+### Container Health Monitoring
+
+**Check container health**
+```bash
+# View recent logs
+docker-compose logs --tail=50 qbit-guard
+
+# Monitor for healthy operation indicators
+docker-compose logs qbit-guard | grep -E "(login OK|Started torrent|Watcher.*started)"
+
+# Watch for error patterns
+docker-compose logs qbit-guard | grep -E "(ERROR|Unhandled error|failed)"
+```
+
+**Container restart policies**
+```yaml
+services:
+  qbit-guard:
+    restart: unless-stopped  # Recommended
+    # restart: always        # Alternative for critical setups
+```
+
+**Resource limits**
+```yaml
+services:
+  qbit-guard:
+    deploy:
+      resources:
+        limits:
+          memory: 512M        # qbit-guard is lightweight
+          cpus: '0.5'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
+```
 
 ## Troubleshooting
 
