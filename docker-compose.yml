@@ -7,11 +7,11 @@ services:
     restart: unless-stopped
     environment:
       # ===== LOGGING =====
-      - LOG_LEVEL=INFO                                    # DEBUG, INFO, WARNING, ERROR
+      - LOG_LEVEL=INFO                                   # DEBUG, INFO, WARNING, ERROR
 
       # ===== qBITTORRENT SETTINGS =====
       - QBIT_HOST=http://qbittorrent:8080                # qBittorrent WebUI URL
-      - QBIT_USER=admin                                   # qBittorrent username
+      - QBIT_USER=admin                                  # qBittorrent username
       - QBIT_PASS=adminadmin                             # qBittorrent password
       - QBIT_ALLOWED_CATEGORIES=tv-sonarr,radarr         # Comma-separated categories to process
       - QBIT_IGNORE_TLS=0                                # Ignore TLS cert errors (0=false, 1=true)
@@ -19,11 +19,8 @@ services:
       - QBIT_DELETE_FILES=true                           # Delete files when removing torrents (true/false)
       - USER_AGENT=qbit-guard/2.0                        # User agent for HTTP requests
 
-      # ===== PRE-AIR CHECK (SONARR) =====
+      # ===== PRE-AIR CHECK (SONARR/RADARR) =====
       - ENABLE_PREAIR_CHECK=1                            # Enable pre-air blocking (0=false, 1=true)
-      - SONARR_URL=http://sonarr:8989                    # Sonarr URL
-      - SONARR_APIKEY=your_sonarr_api_key_here           # Sonarr API key
-      - SONARR_CATEGORIES=tv-sonarr                      # Categories for Sonarr pre-air check
       - EARLY_GRACE_HOURS=6                              # Hours before air to allow early releases
       - EARLY_HARD_LIMIT_HOURS=72                        # Hard limit - block if more than X hours early
       - WHITELIST_OVERRIDES_HARD_LIMIT=0                 # Allow whitelisted to override hard limit (0=false, 1=true)
@@ -31,8 +28,20 @@ services:
       - EARLY_WHITELIST_INDEXERS=                        # Comma-separated indexers to whitelist
       - EARLY_WHITELIST_TRACKERS=                        # Comma-separated tracker domains to whitelist
       - RESUME_IF_NO_HISTORY=1                           # Proceed if no Sonarr history found (0=false, 1=true)
-      - SONARR_TIMEOUT_SEC=45                            # Sonarr API timeout in seconds
+      
+			# ======= SONARR SETTINGS ======
+			- SONARR_URL=http://sonarr:8989                    	 # Sonarr URL
+      - SONARR_APIKEY=your_sonarr_api_key_here      		   # Sonarr API key
+      - SONARR_CATEGORIES=tv-sonarr                        # Categories for Sonarr pre-air check
+			- SONARR_TIMEOUT_SEC=45                        			 # Sonarr API timeout in seconds
       - SONARR_RETRIES=3                                 # Number of retries for Sonarr API calls
+
+			# ===== RADARR SETTINGS =====
+      - RADARR_URL=http://radarr:7878                    # Radarr URL
+      - RADARR_APIKEY=your_radarr_api_key_here           # Radarr API key
+      - RADARR_CATEGORIES=radarr                         # Categories for Radarr processing
+      - RADARR_TIMEOUT_SEC=45                            # Radarr API timeout in seconds
+      - RADARR_RETRIES=3                                 # Number of retries for Radarr API calls
 
       # ===== INTERNET CROSS-VERIFICATION =====
       - INTERNET_CHECK_PROVIDER=tvmaze                   # off, tvmaze, tvdb, both
@@ -59,13 +68,7 @@ services:
       - METADATA_MAX_WAIT_SEC=0                          # Max seconds to wait for metadata (0=unlimited)
       - METADATA_DOWNLOAD_BUDGET_BYTES=0                 # Max bytes to download during metadata fetch (0=unlimited)
 
-      # ===== RADARR SETTINGS =====
-      - RADARR_URL=http://radarr:7878                    # Radarr URL
-      - RADARR_APIKEY=your_radarr_api_key_here           # Radarr API key
-      - RADARR_CATEGORIES=radarr                         # Categories for Radarr processing
-      - RADARR_TIMEOUT_SEC=45                            # Radarr API timeout in seconds
-      - RADARR_RETRIES=3                                 # Number of retries for Radarr API calls
-
+      
     networks:
       - arr-network
     
