@@ -1,0 +1,102 @@
+name: Build & Publish Docker image
+
+on:
+  # Build on pushes to main that touch Dockerfile or src, and on tags (e.g. v1.2.3)
+  push:
+    branches: [ main ]
+    paths:
+      - "Dockerfile"
+      - "src/**"
+      - ".github/workflows/publish.yml"
+    tags:
+      - "v*"
+  # Allow manual runs (optional custom tag)
+  workflow_dispatch:
+    inputs:
+      extra_tag:
+        description: "Optional extra tag to publish (e.g. 1.0.0-rc1)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  packages: write   # required for ghcr.io push
+
+concurrency:
+  group: docker-publish-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Set your image name here (lowercase). If you prefer the repo name, set to ${{ github.event.repository.name }}.
+  IMAGE_NAME: qbit-guard
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Compute registry image name (lowercase owner)
+        id: names
+        run: |
+          OWNER_LC=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          IMAGE="${OWNER_LC}/${{ env.IMAGE_NAME }}"
+          echo "owner_lc=$OWNER_LC" >> $GITHUB_OUTPUT
+          echo "image=ghcr.io/${IMAGE}" >> $GITHUB_OUTPUT
+
+      - name: Set up QEMU (multi-arch)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.names.outputs.image }}
+          # Tags:
+          # - On tags like v1.2.3 -> 1.2.3, 1.2, 1, latest (if default branch)
+          # - On main branch -> latest + main + sha
+          # - On other branches -> branch + sha
+          tags: |
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
+            type=sha
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.title=${{ env.IMAGE_NAME }}
+
+      - name: Build & (conditionally) push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Push extra tag (from workflow_dispatch)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.extra_tag != '' }}
+        run: |
+          SRC="${{ steps.names.outputs.image }}:$(echo '${{ steps.meta.outputs.tags }}' | tr ',' '\n' | head -n1 | xargs)"
+          TGT="${{ steps.names.outputs.image }}:${{ inputs.extra_tag }}"
+          echo "Retagging $SRC -> $TGT"
+          docker buildx imagetools create -t "$TGT" "$SRC"
