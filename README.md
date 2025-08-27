@@ -152,7 +152,3 @@ RADARR_CATEGORIES="radarr"
 Set `LOG_LEVEL=DEBUG` for verbose logging to troubleshoot issues.
 
 ---
-
-**License**: [Add your license here]  
-**Contributing**: [Add contribution guidelines here]  
-**Issues**: [Link to issue tracker]
