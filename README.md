@@ -2,9 +2,18 @@
 
 A zero-dependency Python guard for qBittorrent that provides intelligent torrent management with pre-air checking and ISO/BDMV cleanup.
 
+- **Docs:** https://gengines.github.io/qbit-guard/
+- **Image:** `ghcr.io/gengines/qbit-guard:<tag>`
+
 ## Features
 
 - **Pre-air gate (Sonarr)**: Stops new TV torrents, checks airDateUtc with configurable grace periods, supports release group/indexer/tracker whitelisting, and blocks torrents that are too early
+- **Extension policy (configurable)** ✅ *New*  
+  Allow/Block by file extension with two strategies:
+  - `block` (default): allow everything **except** the blocked list  
+  - `allow`: allow **only** what’s allowed  
+  Sources: env vars and/or `/config/extensions.json`. Enforcement options: delete if **any** disallowed file or **only if all** files disallowed. Adds tag `trash:ext` on deletion.
+
 - **ISO/BDMV cleaner**: After metadata arrives, removes disc-image-only torrents (ISO, IMG, MDF, NRG, CUE, BIN files and BDMV/VIDEO_TS folders) that lack keepable video content
 - **Smart blocklisting**: Blocklists in Sonarr/Radarr before deletion using deduped history (single "grabbed" record per unique release title) with queue failover if history endpoint times out
 - **Internet cross-verification**: Optional TVmaze and/or TheTVDB API integration to cross-check Sonarr air dates
@@ -12,6 +21,9 @@ A zero-dependency Python guard for qBittorrent that provides intelligent torrent
 - **Zero dependencies**: No external libraries, just Python 3.8+ stdlib
 - **Container-friendly**: All configuration via environment variables, logs to stdout
 - **Magnet support**: Handles magnet links by waiting for metadata resolution with configurable timeouts and download budgets
+- **Stateless watcher**  
+  Container polls `/api/v2/sync/maindata` and processes new/changed torrents. No state file; you can force a re-scan via a keyword.
+
 
 ## How it Works
 
@@ -227,6 +239,43 @@ METADATA_DOWNLOAD_BUDGET_BYTES=0             # Max bytes to download while waiti
 RADARR_URL=http://radarr:7878
 RADARR_APIKEY=your_radarr_api_key_here
 RADARR_CATEGORIES="radarr"                   # Categories to apply Radarr blocklisting to
+```
+
+### Extension Policy
+
+```bash
+# Strategy
+GUARD_EXT_STRATEGY=block|allow
+```
+```bash
+# Lists
+GUARD_ALLOWED_EXTS="mkv, mp4, srt, ass"                          # (used in allow mode)
+GUARD_BLOCKED_EXTS="iso, exe, bat, cmd, sh, msi, zip, rar, 7z"   # (overrides defaults in block mode)
+```
+```bash
+# Enforcement
+GUARD_EXT_DELETE_IF_ALL_BLOCKED=1             # (default) – delete only if all files are disallowed
+GUARD_EXT_DELETE_IF_ANY_BLOCKED=0             # – set to 1 to delete if any file is disallowed
+GUARD_EXT_VIOLATION_TAG=trash:ext
+```
+```bash
+# Config file (optional)
+GUARD_EXTS_FILE=/config/extensions.json
+{
+  "strategy": "allow",
+  "allowed": ["mkv","mp4","m4v","webm","srt","ass","flac"],
+  "blocked": ["iso","exe","zip","rar","7z"]
+}
+```
+```bash
+# Disc set override (used by ISO detection and defaults)
+GUARD_DISC_EXTS="iso,img,mdf,nrg,cue,bin"
+```
+### Watcher (polling, stateless)
+```bash
+WATCH_POLL_SECONDS=3.0
+WATCH_PROCESS_EXISTING_AT_START=0       # Set WATCH_PROCESS_EXISTING_AT_START=1 to process everything visible at startup.
+WATCH_RESCAN_KEYWORD=rescan             # Add the WATCH_RESCAN_KEYWORD in category or tags to force re-process.
 ```
 
 ### Reliability & Performance
