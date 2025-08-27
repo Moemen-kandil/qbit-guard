@@ -1,0 +1,26 @@
+site_name: qbit-guard
+site_url: https://gengines.github.io/qbit-guard/
+repo_url: https://github.com/GEngines/qbit-guard
+repo_name: GEngines/qbit-guard
+
+theme:
+  name: material
+  features:
+    - navigation.instant
+    - navigation.sections
+    - search.suggest
+    - search.highlight
+
+nav:
+  - Home: index.md
+  - Usage:
+      - Install: usage/install.md
+      - Configure: usage/configure.md
+      - Environment Vars: usage/env.md
+  - Development: dev.md
+
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - codehilite
