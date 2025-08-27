@@ -9,11 +9,13 @@ Flow (on torrent ADDED):
   2) PRE-AIR gate (Sonarr + optional TVmaze/TheTVDB cross-check).
      - If pre-air BLOCK: blocklist in Sonarr (dedup + retry + queue failover), delete from qB.
   3) If pre-air ALLOW (or not applicable): fetch metadata/file list (start -> wait -> stop),
-     then ISO/BDMV cleaner:
-       - If ISO/BDMV-only (no keepable video): blocklist in Sonarr/Radarr as applicable, delete.
+     then Extension Policy + ISO/BDMV cleaner:
+       - If policy/ISO says delete (no keepable video, all files disallowed, pure disc images, etc.):
+           blocklist in Sonarr/Radarr as applicable, delete.
        - Else: start torrent for real.
 
-Pure stdlib. All logs go to stdout (container logs). Configured via environment variables.
+Configurable via environment variables and optional /config/extensions.json.
+All logs go to stdout (container logs). Pure stdlib.
 """
 
 from __future__ import annotations
@@ -34,7 +36,39 @@ logging.basicConfig(
 )
 log = logging.getLogger("qbit-guard")
 
+
+# --------------------------- Helpers (extensions) ---------------------------
+
+def _split_exts(s: str) -> Set[str]:
+    """Parse comma/space/semicolon-separated extensions; returns naked, lowercase extensions (no dots)."""
+    if not s:
+        return set()
+    parts = re.split(r"[,\s;]+", s.strip())
+    return {p.lower().lstrip(".") for p in parts if p}
+
+def _ext_of(path: str) -> str:
+    base = os.path.basename(path or "")
+    if "." not in base:
+        return ""
+    return base.rsplit(".", 1)[-1].lower()
+
+
 # --------------------------- Config ---------------------------
+
+# Canonical sets
+DISC_IMAGE_EXTS   = _split_exts("iso, img, mdf, nrg, cue, bin")
+RISKY_EXEC_EXTS   = _split_exts("exe, bat, cmd, sh, ps1, msi, dmg, apk, jar, com, scr, vbs, vb, lnk, reg")
+ARCHIVE_EXTS      = _split_exts("zip, rar, 7z, tar, gz, bz2, xz, zst")
+
+DEFAULT_ALLOWED_EXTS = _split_exts("""
+mkv, mp4, m4v, mov, webm, avi, m2ts, ts,
+srt, ass, ssa, sub, idx, sup,
+flac, mka, mp3, aac, ac3, eac3, dts, opus,
+nfo, txt, jpg, jpeg, png, webp
+""")
+
+# Default blocked = disc images ∪ risky executables ∪ archives
+DEFAULT_BLOCKED_EXTS = set().union(DISC_IMAGE_EXTS, RISKY_EXEC_EXTS, ARCHIVE_EXTS)
 
 @dataclass
 class Config:
@@ -102,6 +136,92 @@ class Config:
     radarr_timeout_sec: int = int(os.getenv("RADARR_TIMEOUT_SEC", "45"))
     radarr_retries: int = int(os.getenv("RADARR_RETRIES", "3"))
 
+    # -------- Extension Policy (customizable) --------
+    # Strategy:
+    #   "block" (default): allow everything EXCEPT what's in blocked list
+    #   "allow": allow ONLY what's in allowed list (everything else blocked)
+    ext_strategy: str = os.getenv("GUARD_EXT_STRATEGY", "block").strip().lower()
+    allowed_exts: Set[str] = None  # set in __post_init__
+    blocked_exts: Set[str] = None  # set in __post_init__
+    exts_file: str = os.getenv("GUARD_EXTS_FILE", "/config/extensions.json")
+    # Enforcement:
+    #   - If ALL files are disallowed by policy -> delete (default True)
+    #   - If ANY file is disallowed -> delete (default False)
+    ext_delete_if_all_blocked: bool = os.getenv("GUARD_EXT_DELETE_IF_ALL_BLOCKED", "1") in ("1","true","yes")
+    ext_delete_if_any_blocked: bool = os.getenv("GUARD_EXT_DELETE_IF_ANY_BLOCKED", "0") in ("1","true","yes")
+    ext_violation_tag: str = os.getenv("GUARD_EXT_VIOLATION_TAG", "trash:ext")
+
+    # Disc-image set (used for ISO/BDMV detection); can be overridden
+    disc_exts_env: str = os.getenv("GUARD_DISC_EXTS", "")  # e.g. "iso,img,mdf,toast"
+    disc_exts: Set[str] = None  # set in __post_init__
+
+
+    def __post_init__(self):
+        # defaults
+        self.allowed_exts = set(DEFAULT_ALLOWED_EXTS)
+        self.blocked_exts = set(DEFAULT_BLOCKED_EXTS)
+
+        # Optional JSON file: {"strategy": "...", "allowed": [...], "blocked": [...]}
+        if os.path.isfile(self.exts_file):
+            try:
+                with open(self.exts_file, "r", encoding="utf-8") as f:
+                    data = json.load(f) or {}
+                strategy = str(data.get("strategy", self.ext_strategy)).strip().lower()
+                if strategy in ("block","allow"):
+                    self.ext_strategy = strategy
+                allowed_val = data.get("allowed", [])
+                blocked_val = data.get("blocked", [])
+                if isinstance(allowed_val, list):
+                    allowed = _split_exts(",".join(allowed_val))
+                else:
+                    allowed = _split_exts(str(allowed_val or ""))
+                if isinstance(blocked_val, list):
+                    blocked = _split_exts(",".join(blocked_val))
+                else:
+                    blocked = _split_exts(str(blocked_val or ""))
+                if allowed:
+                    self.allowed_exts = allowed
+                if blocked:
+                    self.blocked_exts = blocked
+                log.info("Loaded extension policy from %s | strategy=%s | allowed=%d | blocked=%d",
+                         self.exts_file, self.ext_strategy, len(self.allowed_exts), len(self.blocked_exts))
+            except Exception as e:
+                log.warning("Failed to read %s: %s (falling back to env/defaults)", self.exts_file, e)
+
+        # Env overrides
+        env_allowed = _split_exts(os.getenv("GUARD_ALLOWED_EXTS", ""))
+        env_blocked = _split_exts(os.getenv("GUARD_BLOCKED_EXTS", ""))
+
+        # Disc set: env override or default constant
+        env_disc = _split_exts(self.disc_exts_env)
+        self.disc_exts = env_disc if env_disc else set(DISC_IMAGE_EXTS)
+
+        env_strategy = os.getenv("GUARD_EXT_STRATEGY", "").strip().lower()
+        if env_allowed:
+            self.allowed_exts = env_allowed
+        if env_blocked:
+            self.blocked_exts = env_blocked
+        if env_strategy in ("block","allow"):
+            self.ext_strategy = env_strategy
+
+        log.info("Extension policy | strategy=%s | allowed=%d | blocked=%d | enforce(any=%s, all=%s)",
+                 self.ext_strategy, len(self.allowed_exts), len(self.blocked_exts),
+                 self.ext_delete_if_any_blocked, self.ext_delete_if_all_blocked)
+
+    # --- Policy helpers ---
+    def is_ext_allowed(self, ext: str) -> bool:
+        if not ext:
+            return self.ext_strategy == "block"  # unknown ext allowed in block mode
+        if ext in self.blocked_exts:
+            return False
+        if self.ext_strategy == "allow":
+            return ext in self.allowed_exts
+        return True  # block strategy
+
+    def is_path_allowed(self, path: str) -> bool:
+        return self.is_ext_allowed(_ext_of(path))
+
+
 # --------------------------- HTTP ---------------------------
 
 class HttpClient:
@@ -148,6 +268,7 @@ class HttpClient:
         with self.opener.open(req, timeout=timeout) as r:
             return r.read()
 
+
 # --------------------------- qBittorrent ---------------------------
 
 class QbitClient:
@@ -161,6 +282,7 @@ class QbitClient:
 
     def login(self) -> None:
         """Authenticate with qBittorrent."""
+        # NOTE: If you hit 403s, add CSRF headers in HttpClient (Referer/Origin) or adjust qB settings.
         self.http.post_form(self._url("/api/v2/auth/login"),
                             {"username": self.cfg.qbit_user, "password": self.cfg.qbit_pass})
         log.info("qB: login OK")
@@ -216,6 +338,7 @@ class QbitClient:
 
     def trackers(self, h: str) -> List[Dict[str, Any]]:
         return self.get_json("/api/v2/torrents/trackers", {"hash": h}) or []
+
 
 # --------------------------- Sonarr / Radarr ---------------------------
 
@@ -371,6 +494,7 @@ class RadarrClient(BaseArr):
         else:
             log.info("Radarr: nothing to fail or in queue for downloadId=%s", download_id)
 
+
 # --------------------------- Utilities ---------------------------
 
 def now_utc() -> datetime.datetime:
@@ -392,6 +516,7 @@ def domain_from_url(u: str) -> str:
         return host.split(":")[0]
     except Exception:
         return u.lower()
+
 
 # --------------------------- Internet Airdates ---------------------------
 
@@ -416,10 +541,10 @@ class InternetDates:
             if tvdb:
                 j = self._get(f"{self.cfg.tvmaze_base}/lookup/shows?thetvdb={int(tvdb)}", self.cfg.tvmaze_timeout)
                 if isinstance(j, dict) and j.get("id"): return int(j["id"])
-            if imdb and not imdb.startswith("tt"):
+            if imdb and not str(imdb).startswith("tt"):
                 imdb = "tt" + str(imdb)
             if imdb:
-                j = self._get(f"{self.cfg.tvmaze_base}/lookup/shows?imdb={uparse.quote(imdb)}", self.cfg.tvmaze_timeout)
+                j = self._get(f"{self.cfg.tvmaze_base}/lookup/shows?imdb={uparse.quote(str(imdb))}", self.cfg.tvmaze_timeout)
                 if isinstance(j, dict) and j.get("id"): return int(j["id"])
             if title:
                 j = self._get(f"{self.cfg.tvmaze_base}/singlesearch/shows?q={uparse.quote(title)}", self.cfg.tvmaze_timeout)
@@ -472,13 +597,15 @@ class InternetDates:
                         s = ep.get("airstamp") or ep.get("firstAired") or ep.get("airDate") or ep.get("date")
                         if not s: return None
                         if isinstance(s, str) and s.endswith("Z"): s = s[:-1] + "+00:00"
-                        if len(s) == 10 and s[4] == "-" and s[7] == "-": s += "T00:00:00+00:00"
+                        if isinstance(s, str) and len(s) == 10 and s[4] == "-" and s[7] == "-":
+                            s += "T00:00:00+00:00"
                         try: return datetime.datetime.fromisoformat(s)
                         except Exception: return None
                 if not j.get("data"): break
         except Exception:
             return None
         return None
+
 
 # --------------------------- Pre-Air Gate ---------------------------
 
@@ -538,14 +665,12 @@ class PreAirGate:
 
         # Internet cross-checks
         if not all_aired and self.cfg.internet_check_provider in ("tvmaze","both"):
-            # get Sonarr series details for mapping
-            for r in episodes:
-                pass
             inet_future = []
             for eid in episodes:
                 ep = self.sonarr.episode(eid) or {}
                 sid = ep.get("seriesId")
-                if not sid: inet_future.append(99999.0); continue
+                if not sid:
+                    inet_future.append(99999.0); continue
                 if sid not in series_cache:
                     series_cache[sid] = self.sonarr.series(sid) or {}
                 series = series_cache[sid]
@@ -556,16 +681,17 @@ class PreAirGate:
                     if dt and dt > now_utc(): inet_future.append(hours_until(dt))
                     elif dt is None: inet_future.append(99999.0)
             if inet_future:
-                all_aired = False if inet_future else all_aired
-                m = max(inet_future) if inet_future else 0.0
+                m = max(inet_future)
                 max_future = min(max_future, m) if max_future else m
+                all_aired = False
 
         if not all_aired and self.cfg.internet_check_provider in ("tvdb","both"):
             inet_future = []
             for eid in episodes:
                 ep = self.sonarr.episode(eid) or {}
                 sid = ep.get("seriesId")
-                if not sid: inet_future.append(99999.0); continue
+                if not sid:
+                    inet_future.append(99999.0); continue
                 if sid not in series_cache:
                     series_cache[sid] = self.sonarr.series(sid) or {}
                 series = series_cache[sid]
@@ -576,9 +702,9 @@ class PreAirGate:
                     if dt and dt > now_utc(): inet_future.append(hours_until(dt))
                     elif dt is None: inet_future.append(99999.0)
             if inet_future:
-                all_aired = False if inet_future else all_aired
-                m = max(inet_future) if inet_future else 0.0
+                m = max(inet_future)
                 max_future = min(max_future, m) if max_future else m
+                all_aired = False
 
         # Whitelist/grace/hard-cap decisions
         allow_by_grace = (not all_aired) and (max_future <= self.cfg.early_grace_hours)
@@ -598,6 +724,7 @@ class PreAirGate:
 
         log.info("Pre-air: BLOCK (max_future=%.2f h)", max_future)
         return False, "block", hist
+
 
 # --------------------------- Metadata Fetcher ---------------------------
 
@@ -659,11 +786,16 @@ class MetadataFetcher:
 
         return files or []
 
-# --------------------------- ISO Cleaner ---------------------------
+
+# --------------------------- ISO + Extension Policy Cleaner ---------------------------
 
 class IsoCleaner:
-    """Detects ISO/BDMV-only torrents and removes them, with Arr blocklisting."""
-    ISO_RE = re.compile(r'\.(iso|img|mdf|nrg|cue|bin)$', re.I)
+    """
+    Detects ISO/BDMV-only torrents and applies extension policy.
+    - If pure disc images (ISO/BDMV) with no keepable video -> delete
+    - If extension policy deems ALL files disallowed -> delete (configurable)
+    - If SOME files disallowed -> log (optionally delete if ext_delete_if_any_blocked)
+    """
     VIDEO_RE = re.compile(r'\.(mkv|mp4|m4v|avi|ts|m2ts|mov|webm)$', re.I)
 
     def __init__(self, cfg: Config, qbit: QbitClient, sonarr: SonarrClient, radarr: RadarrClient):
@@ -673,41 +805,68 @@ class IsoCleaner:
         self.radarr = radarr
         self.min_bytes = int(cfg.min_keepable_video_mb * 1024 * 1024)
 
+        # Build disc-image regex from a single source of truth
+        disc_pat = r'\.(' + '|'.join(sorted(map(re.escape, self.cfg.disc_exts))) + r')$'
+        self.disc_re = re.compile(disc_pat, re.I)
+
     @staticmethod
     def _is_disc_path(name: str) -> bool:
         n = (name or "").replace("\\","/").lower()
-        return bool(IsoCleaner.ISO_RE.search(n) or "/bdmv/" in n or "/video_ts/" in n)
+        return bool(IsoCleaner.disc_re.search(n) or "/bdmv/" in n or "/video_ts/" in n)
 
     def has_keepable_video(self, files: Sequence[Dict[str, Any]]) -> bool:
         for f in files:
             n = f.get("name","")
             sz = int(f.get("size",0))
-            if self.VIDEO_RE.search(n) and sz >= self.min_bytes:
+            if self.VIDEO_RE.search(n) and sz >= self.min_bytes and self.cfg.is_path_allowed(n):
                 return True
         return False
 
+    def _blocklist_arr_if_applicable(self, category_norm: str, torrent_hash: str) -> None:
+        if category_norm in self.cfg.sonarr_categories and self.sonarr.enabled:
+            try: self.sonarr.blocklist_download(torrent_hash)
+            except Exception as e: log.error("Sonarr blocklist error: %s", e)
+        if category_norm in self.cfg.radarr_categories and self.radarr.enabled:
+            try: self.radarr.blocklist_download(torrent_hash)
+            except Exception as e: log.error("Radarr blocklist error: %s", e)
+
     def evaluate_and_act(self, torrent_hash: str, category_norm: str) -> bool:
         """
-        Returns True if it deleted the torrent (ISO/BDMV-only), False otherwise.
+        Returns True if it deleted the torrent (ISO/BDMV-only or extension-policy violation), False otherwise.
         Will notify Sonarr/Radarr before deletion based on category.
         """
-        # Fetch all current files (we call after metadata fetch).
         all_files = self.qbit.files(torrent_hash) or []
         relevant = [f for f in all_files if int(f.get("size",0)) > 0]
+
+        # ---- Extension policy analysis (before disc detection) ----
+        disallowed = [f for f in relevant if not self.cfg.is_path_allowed(f.get("name",""))]
+        if disallowed:
+            total = len(relevant)
+            bad = len(disallowed)
+            sample = (disallowed[0].get("name","") if disallowed else "")
+            log.info("Ext policy: %d/%d file(s) disallowed. e.g., %s", bad, total, sample)
+            if self.cfg.ext_delete_if_any_blocked or (self.cfg.ext_delete_if_all_blocked and bad == total):
+                # Delete due to extension policy
+                self.qbit.add_tags(torrent_hash, self.cfg.ext_violation_tag)
+                self._blocklist_arr_if_applicable(category_norm, torrent_hash)
+                if not self.cfg.dry_run:
+                    try:
+                        self.qbit.delete(torrent_hash, self.cfg.delete_files)
+                        log.info("Removed torrent %s due to extension policy.", torrent_hash)
+                    except Exception as e:
+                        log.error("qB delete failed: %s", e)
+                else:
+                    log.info("DRY-RUN: would remove torrent %s due to extension policy.", torrent_hash)
+                return True
+
+        # ---- Disc-image detection (ISO/BDMV) ----
         all_discish = (len(relevant) > 0) and all(self._is_disc_path(f.get("name","")) for f in relevant)
         keepable = self.has_keepable_video(relevant)
 
         if all_discish and not keepable:
             log.info("ISO cleaner: disc-image content detected (no keepable video).")
-            # Blocklist in the appropriate app(s)
-            if category_norm in self.cfg.sonarr_categories and self.sonarr.enabled:
-                try: self.sonarr.blocklist_download(torrent_hash)
-                except Exception as e: log.error("Sonarr blocklist error: %s", e)
-            if category_norm in self.cfg.radarr_categories and self.radarr.enabled:
-                try: self.radarr.blocklist_download(torrent_hash)
-                except Exception as e: log.error("Radarr blocklist error: %s", e)
-            # Tag and delete
             self.qbit.add_tags(torrent_hash, "trash:iso")
+            self._blocklist_arr_if_applicable(category_norm, torrent_hash)
             if not self.cfg.dry_run:
                 try:
                     self.qbit.delete(torrent_hash, self.cfg.delete_files)
@@ -718,13 +877,15 @@ class IsoCleaner:
                 log.info("DRY-RUN: would remove torrent %s (ISO/BDMV-only).", torrent_hash)
             return True
 
-        log.info("ISO cleaner: content looks OK (keepable=%s, files=%d).", keepable, len(relevant))
+        log.info("ISO/Ext check: keepable=%s, files=%d (disallowed=%d).",
+                 keepable, len(relevant), len(disallowed))
         return False
+
 
 # --------------------------- Orchestrator ---------------------------
 
 class TorrentGuard:
-    """Main orchestrator that wires qB, Sonarr/Radarr, pre-air, metadata, and ISO cleaner together."""
+    """Main orchestrator that wires qB, Sonarr/Radarr, pre-air, metadata, and ISO/Extension cleaner together."""
     def __init__(self, cfg: Config):
         self.cfg = cfg
         self.http = HttpClient(cfg.ignore_tls, cfg.user_agent)
@@ -771,10 +932,8 @@ class TorrentGuard:
         if self.preair.should_apply(category_norm):
             allow, reason, history_rows = self.preair.decision(self.qbit, torrent_hash, tracker_hosts)
             if not allow:
-                # Blocklist + delete
                 if not self.cfg.dry_run:
                     try:
-                        # history-based blocklist (dedup inside client) or queue failover
                         self.sonarr.blocklist_download(torrent_hash)
                     except Exception as e:
                         log.error("Sonarr blocklist error: %s", e)
@@ -788,15 +947,15 @@ class TorrentGuard:
                     log.info("DRY-RUN: would delete torrent %s due to pre-air (reason=%s).", torrent_hash, reason)
                 return
             else:
-                log.info("Pre-air passed (reason=%s). Proceeding to file/ISO check.", reason)
+                log.info("Pre-air passed (reason=%s). Proceeding to file/ISO/ext check.", reason)
         else:
             log.info("Pre-air gate not applicable for category '%s' or Sonarr disabled.", category)
 
-        # 2) Metadata + ISO/BDMV cleaner
+        # 2) Metadata + ISO/Extension policy cleaner
         if self.cfg.enable_iso_check:
             files = self.metadata.fetch(torrent_hash)
             if not files:
-                log.warning("Metadata not available; skipping ISO check.")
+                log.warning("Metadata not available; skipping ISO/ext check.")
             else:
                 deleted = self.iso.evaluate_and_act(torrent_hash, category_norm)
                 if deleted:
@@ -807,6 +966,7 @@ class TorrentGuard:
         if not self.cfg.dry_run:
             self.qbit.start(torrent_hash)
         log.info("Started torrent %s after checks.", torrent_hash)
+
 
 # --------------------------- Main ---------------------------
 

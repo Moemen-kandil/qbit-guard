@@ -8,5 +8,4 @@ WORKDIR /app
 COPY src/guard.py /app/guard.py
 COPY src/watcher.py /app/watcher.py
 
-
 ENTRYPOINT ["python", "/app/watcher.py"]
