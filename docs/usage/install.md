@@ -1,4 +1,4 @@
-# Installation Guide
+# <img alt="qbit-guard logo" src="../img/qbit-guard-icon.png"> Installation Guide
 
 qbit-guard can be deployed in two ways: as a **containerized service** (recommended) or as a **traditional script**. Choose the method that best fits your setup.
 

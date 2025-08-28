@@ -1,4 +1,4 @@
-# qbit-guard
+# <img alt="qbit-guard logo" src="img/qbit-guard-icon.png"> qbit-guard
 
 A zero-dependency Python guard for qBittorrent that provides intelligent torrent management with **pre-air checking** and **ISO/BDMV cleanup**.
 
