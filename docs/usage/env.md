@@ -8,10 +8,10 @@ Complete reference of all environment variables supported by qbit-guard, organiz
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `QBIT_HOST` | - | **Required.** qBittorrent WebUI URL (e.g., `http://qbittorrent:8080`) |
+| `QBIT_HOST` | `http://127.0.0.1:8080` | qBittorrent WebUI URL |
 | `QBIT_USER` | `admin` | qBittorrent WebUI username |
-| `QBIT_PASS` | - | **Required.** qBittorrent WebUI password |
-| `QBIT_ALLOWED_CATEGORIES` | - | **Required.** Comma-separated list of categories to process |
+| `QBIT_PASS` | `adminadmin` | qBittorrent WebUI password |
+| `QBIT_ALLOWED_CATEGORIES` | `radarr,tv-sonarr` | Comma-separated list of categories to process |
 | `QBIT_DELETE_FILES` | `true` | Delete files when removing torrents |
 | `QBIT_IGNORE_TLS` | `0` | Set to `1` to ignore SSL certificate errors |
 | `QBIT_DRY_RUN` | `0` | Set to `1` for testing mode (no actual deletions) |
@@ -32,8 +32,8 @@ Complete reference of all environment variables supported by qbit-guard, organiz
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ENABLE_PREAIR_CHECK` | `0` | Enable pre-air checking (`0` or `1`) |
-| `SONARR_URL` | - | Sonarr base URL (e.g., `http://sonarr:8989`) |
+| `ENABLE_PREAIR_CHECK` | `1` | Enable pre-air checking (`0` or `1`) |
+| `SONARR_URL` | `http://127.0.0.1:8989` | Sonarr base URL |
 | `SONARR_APIKEY` | - | Sonarr API key |
 | `SONARR_CATEGORIES` | `tv-sonarr` | Categories to apply pre-air checks to |
 | `EARLY_GRACE_HOURS` | `6` | Allow releases this many hours before air date |
@@ -52,7 +52,7 @@ Complete reference of all environment variables supported by qbit-guard, organiz
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `RADARR_URL` | - | Radarr base URL (e.g., `http://radarr:7878`) |
+| `RADARR_URL` | `http://127.0.0.1:7878` | Radarr base URL |
 | `RADARR_APIKEY` | - | Radarr API key |
 | `RADARR_CATEGORIES` | `radarr` | Categories to apply Radarr blocklisting to |
 | `RADARR_TIMEOUT_SEC` | `45` | HTTP timeout for Radarr API calls |
@@ -64,7 +64,7 @@ Complete reference of all environment variables supported by qbit-guard, organiz
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `INTERNET_CHECK_PROVIDER` | `off` | Provider selection: `off`, `tvmaze`, `tvdb`, or `both` |
+| `INTERNET_CHECK_PROVIDER` | `tvmaze` | Provider selection: `off`, `tvmaze`, `tvdb`, or `both` |
 
 ### TVmaze Settings
 | Variable | Default | Description |
@@ -89,7 +89,7 @@ Complete reference of all environment variables supported by qbit-guard, organiz
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ENABLE_ISO_CHECK` | `0` | Enable ISO/disc image cleanup (`0` or `1`) |
+| `ENABLE_ISO_CHECK` | `1` | Enable ISO/disc image cleanup (`0` or `1`) |
 | `MIN_KEEPABLE_VIDEO_MB` | `50` | Minimum size for video files to keep (MB) |
 | `METADATA_POLL_INTERVAL` | `1.5` | Seconds between file list checks during metadata fetching |
 | `METADATA_MAX_WAIT_SEC` | `0` | Max wait for metadata resolution (`0` = infinite) |
@@ -125,62 +125,46 @@ Complete reference of all environment variables supported by qbit-guard, organiz
 
 ### Minimal Setup
 ```bash
-# Required minimum
+# Only required when using containers (defaults work for localhost)
 QBIT_HOST=http://qbittorrent:8080
-QBIT_USER=admin
 QBIT_PASS=your_password
-QBIT_ALLOWED_CATEGORIES=tv-sonarr,radarr
 
-# Basic ISO cleanup
-ENABLE_ISO_CHECK=1
+# Note: QBIT_USER, QBIT_ALLOWED_CATEGORIES, ENABLE_ISO_CHECK all have sensible defaults
 ```
 
 ### Pre-air Gate Only
 ```bash
-# qBittorrent connection
+# qBittorrent connection (for containers)
 QBIT_HOST=http://qbittorrent:8080
-QBIT_USER=admin
 QBIT_PASS=your_password
-QBIT_ALLOWED_CATEGORIES=tv-sonarr
 
-# Sonarr pre-air checking
-ENABLE_PREAIR_CHECK=1
+# Sonarr pre-air checking - API key required
 SONARR_URL=http://sonarr:8989
 SONARR_APIKEY=your_sonarr_api_key
-SONARR_CATEGORIES=tv-sonarr
-EARLY_GRACE_HOURS=6
-EARLY_HARD_LIMIT_HOURS=72
+
+# Note: ENABLE_PREAIR_CHECK=1 by default, along with reasonable grace periods
 ```
 
 ### Full Featured Setup
 ```bash
-# qBittorrent
+# qBittorrent (for containers)
 QBIT_HOST=http://qbittorrent:8080
-QBIT_USER=admin
 QBIT_PASS=your_password
-QBIT_ALLOWED_CATEGORIES=tv-sonarr,radarr
 
-# Pre-air checking
-ENABLE_PREAIR_CHECK=1
+# Sonarr pre-air checking
 SONARR_URL=http://sonarr:8989
 SONARR_APIKEY=your_sonarr_api_key
-EARLY_GRACE_HOURS=6
-EARLY_HARD_LIMIT_HOURS=72
 EARLY_WHITELIST_GROUPS=trusted_group1,trusted_group2
-
-# Internet verification
-INTERNET_CHECK_PROVIDER=tvmaze
-
-# ISO cleanup
-ENABLE_ISO_CHECK=1
-MIN_KEEPABLE_VIDEO_MB=100
 
 # Radarr integration
 RADARR_URL=http://radarr:7878
 RADARR_APIKEY=your_radarr_api_key
 
-# Debugging
+# Optional overrides
+MIN_KEEPABLE_VIDEO_MB=100
 LOG_LEVEL=DEBUG
+
+# Note: Many features enabled by default - ISO cleanup, pre-air checks, TVmaze verification
 ```
 
 ### High Performance Setup
@@ -209,13 +193,22 @@ Variables with meaningful defaults that you may not need to set:
 
 | Variable | Default | Notes |
 |----------|---------|-------|
+| `QBIT_HOST` | `http://127.0.0.1:8080` | Usually needs to be changed for containers |
 | `QBIT_USER` | `admin` | Most qBittorrent installations |
+| `QBIT_PASS` | `adminadmin` | Default qBittorrent password |
+| `QBIT_ALLOWED_CATEGORIES` | `radarr,tv-sonarr` | Common categories for *arr services |
 | `QBIT_DELETE_FILES` | `true` | Usually desired behavior |
+| `ENABLE_PREAIR_CHECK` | `1` | Pre-air checking enabled by default |
+| `SONARR_URL` | `http://127.0.0.1:8989` | Default Sonarr port |
+| `RADARR_URL` | `http://127.0.0.1:7878` | Default Radarr port |
+| `ENABLE_ISO_CHECK` | `1` | ISO cleanup enabled by default |
+| `INTERNET_CHECK_PROVIDER` | `tvmaze` | TVmaze enabled by default (no API key needed) |
 | `WATCH_POLL_SECONDS` | `3.0` | Good balance of responsiveness/resources |
 | `EARLY_GRACE_HOURS` | `6` | Reasonable pre-air grace period |
 | `EARLY_HARD_LIMIT_HOURS` | `72` | Prevents very early releases |
 | `MIN_KEEPABLE_VIDEO_MB` | `50` | Filters out samples and extras |
 | `LOG_LEVEL` | `INFO` | Change to `DEBUG` for troubleshooting |
+| `USER_AGENT` | `qbit-guard/2.0` | HTTP User-Agent for API calls |
 
 ---
 
