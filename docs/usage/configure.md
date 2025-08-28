@@ -189,6 +189,18 @@ WATCH_PROCESS_EXISTING_AT_START=0            # Set to 1 to process existing torr
 WATCH_RESCAN_KEYWORD=rescan                  # Add this keyword to category/tags to force reprocessing
 ```
 
+### Connection Reliability
+
+Configure reconnection behavior when qBittorrent restarts:
+
+```bash
+QBIT_MAX_RETRY_ATTEMPTS=5                    # Maximum reconnection attempts (default: 5)
+QBIT_INITIAL_BACKOFF_SEC=1.0                 # Initial retry delay in seconds (default: 1.0)
+QBIT_MAX_BACKOFF_SEC=60.0                    # Maximum retry delay in seconds (default: 60.0)
+```
+
+The watcher will automatically detect connection failures and attempt to reconnect with exponential backoff. On successful reconnection, it resets the request ID and re-authenticates to ensure clean state recovery.
+
 ---
 
 ## Reliability & Performance
