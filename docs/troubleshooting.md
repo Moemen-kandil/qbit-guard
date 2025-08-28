@@ -127,6 +127,28 @@ This guide covers common issues, debugging techniques, and solutions for qbit-gu
 
 ---
 
+### qBittorrent Container Restarts
+
+**Symptoms**: Watcher gets stuck after qBittorrent restarts, logs show stale request errors
+
+**Root Cause**: Previous versions couldn't handle qBittorrent container restarts gracefully
+
+**Improved Behavior (v2.0+)**: The watcher now automatically:
+1. Detects connection failures from HTTP errors (401, 403, 500-504) 
+2. Implements exponential backoff retry with configurable delays
+3. Resets request ID (rid) to 0 on reconnection
+4. Re-authenticates automatically when connection is restored
+5. Resumes normal polling after successful reconnection
+
+**Configuration**:
+```bash
+QBIT_MAX_RETRY_ATTEMPTS=5        # Max reconnection attempts
+QBIT_INITIAL_BACKOFF_SEC=1.0     # Initial retry delay  
+QBIT_MAX_BACKOFF_SEC=60.0        # Maximum retry delay
+```
+
+---
+
 ## :gear: API & Integration Issues
 docker-compose logs -f qbit-guard | grep "Watcher.*started"
 ```
@@ -333,6 +355,12 @@ docker-compose logs qbit-guard | grep -E "(ERROR|Unhandled error|failed)"
 - ❌ `Unhandled error` - Configuration or connectivity issue
 - ❌ `qB: login failed` - Authentication problem
 - ❌ `Timeout` - Network connectivity issues
+
+**Connection Recovery Indicators**:
+- ⚠️ `Connection error (failure N)` - Temporary connection issue detected
+- ℹ️ `Multiple connection failures detected, attempting reconnection` - Reconnection initiated
+- ✅ `Successfully reconnected to qBittorrent` - Connection restored
+- ❌ `Failed to reconnect to qBittorrent, exiting` - Persistent connection failure
 
 ---
 
