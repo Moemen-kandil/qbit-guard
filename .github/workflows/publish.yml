@@ -65,36 +65,19 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ steps.names.outputs.image }}
-          # Tags:
-          # - On tags like v1.2.3 -> 1.2.3, 1.2, 1, latest (if default branch)
-          # - On main branch -> latest + main + sha
-          # - On other branches -> branch + sha
+          # Updated tag configuration to ensure 'latest' tag is properly added
           tags: |
             type=ref,event=tag
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
-            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+            type=raw,value=latest
             type=ref,event=branch
             type=sha
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.title=${{ env.IMAGE_NAME }}
-
-      # Ensure latest tag is always applied for pushes to main branch
-      - name: Add latest tag explicitly
-        if: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
-        run: |
-          echo "Will ensure 'latest' tag is included for main branch push"
-          TAGS="${{ steps.meta.outputs.tags }}"
-          if [[ "$TAGS" != *":latest"* ]]; then
-            echo "Adding latest tag explicitly to tags list"
-            echo "tags=$TAGS,${{ steps.names.outputs.image }}:latest" >> $GITHUB_ENV
-          else
-            echo "Latest tag already included in metadata output"
-            echo "tags=$TAGS" >> $GITHUB_ENV
-          fi
 
       - name: Build & (conditionally) push
         uses: docker/build-push-action@v6
@@ -103,7 +86,7 @@ jobs:
           file: ./Dockerfile
           platforms: linux/amd64,linux/arm64
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ env.tags || steps.meta.outputs.tags }}
+          tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
