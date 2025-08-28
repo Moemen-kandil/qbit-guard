@@ -18,6 +18,8 @@ nav:
       - Configure: usage/configure.md
       - Environment Vars: usage/env.md
       - Development: usage/dev.md
+  - Examples: examples.md
+  - Troubleshooting: troubleshooting.md
 
 markdown_extensions:
   - admonition
