@@ -1,4 +1,4 @@
-# <img alt="qbit-guard logo" src="../img/qbit-guard-icon.png"> Configuration Guide
+# <img alt="qbit-guard logo" src="../../img/qbit-guard-icon.png"> Configuration Guide
 
 All configuration is handled via environment variables with sensible defaults. This guide covers all the major configuration areas for qbit-guard.
 
