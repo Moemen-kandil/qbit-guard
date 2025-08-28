@@ -2,7 +2,7 @@
 
 A zero-dependency Python guard for qBittorrent that provides intelligent torrent management with **pre-air checking** and **ISO/BDMV cleanup**.
 
-[Install →](usage/install.md) · [Configure →](usage/configure.md) · [Environment Vars →](usage/env.md) · [Development →](../dev.md)
+[Install →](usage/install.md) · [Configure →](usage/configure.md) · [Environment Vars →](usage/env.md) · [Development →](usage/dev.md)
 
 ---
 
