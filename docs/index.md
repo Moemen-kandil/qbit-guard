@@ -200,7 +200,7 @@ flowchart TD
 
     ```bash
     # Download the script
-    wget https://github.com/GEngines/qbit-guard/raw/main/src/qbit_guard.py
+    wget https://github.com/GEngines/qbit-guard/raw/main/src/guard.py
     
     # Set environment variables
     export QBIT_HOST=http://localhost:8080
