@@ -11,7 +11,7 @@ Complete reference of all environment variables supported by qbit-guard, organiz
 | `QBIT_HOST` | `http://127.0.0.1:8080` | qBittorrent WebUI URL |
 | `QBIT_USER` | `admin` | qBittorrent WebUI username |
 | `QBIT_PASS` | `adminadmin` | qBittorrent WebUI password |
-| `QBIT_ALLOWED_CATEGORIES` | `tv-sonarr,radarr` | Comma-separated list of categories to process |
+| `QBIT_ALLOWED_CATEGORIES` | `radarr,tv-sonarr` | Comma-separated list of categories to process |
 | `QBIT_DELETE_FILES` | `true` | Delete files when removing torrents |
 | `QBIT_IGNORE_TLS` | `0` | Set to `1` to ignore SSL certificate errors |
 | `QBIT_DRY_RUN` | `0` | Set to `1` for testing mode (no actual deletions) |
@@ -125,62 +125,46 @@ Complete reference of all environment variables supported by qbit-guard, organiz
 
 ### Minimal Setup
 ```bash
-# Required minimum
+# Only required when using containers (defaults work for localhost)
 QBIT_HOST=http://qbittorrent:8080
-QBIT_USER=admin
 QBIT_PASS=your_password
-QBIT_ALLOWED_CATEGORIES=tv-sonarr,radarr
 
-# Basic ISO cleanup
-ENABLE_ISO_CHECK=1
+# Note: QBIT_USER, QBIT_ALLOWED_CATEGORIES, ENABLE_ISO_CHECK all have sensible defaults
 ```
 
 ### Pre-air Gate Only
 ```bash
-# qBittorrent connection
+# qBittorrent connection (for containers)
 QBIT_HOST=http://qbittorrent:8080
-QBIT_USER=admin
 QBIT_PASS=your_password
-QBIT_ALLOWED_CATEGORIES=tv-sonarr
 
-# Sonarr pre-air checking
-ENABLE_PREAIR_CHECK=1
+# Sonarr pre-air checking - API key required
 SONARR_URL=http://sonarr:8989
 SONARR_APIKEY=your_sonarr_api_key
-SONARR_CATEGORIES=tv-sonarr
-EARLY_GRACE_HOURS=6
-EARLY_HARD_LIMIT_HOURS=72
+
+# Note: ENABLE_PREAIR_CHECK=1 by default, along with reasonable grace periods
 ```
 
 ### Full Featured Setup
 ```bash
-# qBittorrent
+# qBittorrent (for containers)
 QBIT_HOST=http://qbittorrent:8080
-QBIT_USER=admin
 QBIT_PASS=your_password
-QBIT_ALLOWED_CATEGORIES=tv-sonarr,radarr
 
-# Pre-air checking
-ENABLE_PREAIR_CHECK=1
+# Sonarr pre-air checking
 SONARR_URL=http://sonarr:8989
 SONARR_APIKEY=your_sonarr_api_key
-EARLY_GRACE_HOURS=6
-EARLY_HARD_LIMIT_HOURS=72
 EARLY_WHITELIST_GROUPS=trusted_group1,trusted_group2
-
-# Internet verification
-INTERNET_CHECK_PROVIDER=tvmaze
-
-# ISO cleanup
-ENABLE_ISO_CHECK=1
-MIN_KEEPABLE_VIDEO_MB=100
 
 # Radarr integration
 RADARR_URL=http://radarr:7878
 RADARR_APIKEY=your_radarr_api_key
 
-# Debugging
+# Optional overrides
+MIN_KEEPABLE_VIDEO_MB=100
 LOG_LEVEL=DEBUG
+
+# Note: Many features enabled by default - ISO cleanup, pre-air checks, TVmaze verification
 ```
 
 ### High Performance Setup
@@ -212,7 +196,7 @@ Variables with meaningful defaults that you may not need to set:
 | `QBIT_HOST` | `http://127.0.0.1:8080` | Usually needs to be changed for containers |
 | `QBIT_USER` | `admin` | Most qBittorrent installations |
 | `QBIT_PASS` | `adminadmin` | Default qBittorrent password |
-| `QBIT_ALLOWED_CATEGORIES` | `tv-sonarr,radarr` | Common categories for *arr services |
+| `QBIT_ALLOWED_CATEGORIES` | `radarr,tv-sonarr` | Common categories for *arr services |
 | `QBIT_DELETE_FILES` | `true` | Usually desired behavior |
 | `ENABLE_PREAIR_CHECK` | `1` | Pre-air checking enabled by default |
 | `SONARR_URL` | `http://127.0.0.1:8989` | Default Sonarr port |
