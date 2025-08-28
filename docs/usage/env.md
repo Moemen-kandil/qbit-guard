@@ -1,4 +1,4 @@
-# <img alt="qbit-guard logo" src="../img/qbit-guard-icon.png"> Environment Variables Reference
+# <img alt="qbit-guard logo" src="../../img/qbit-guard-icon.png"> Environment Variables Reference
 
 Complete reference of all environment variables supported by qbit-guard, organized by feature area.
 
