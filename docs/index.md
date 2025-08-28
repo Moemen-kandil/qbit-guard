@@ -145,7 +145,7 @@ flowchart TD
 | **qBittorrent** | 5.x (4.x supported) | Torrent client | :material-check: Required |
 | **Python** | 3.8+ | Script mode only | :material-minus: Optional |
 | **Sonarr** | v3+ | Pre-air checking | :material-minus: Optional |
-| **Radarr** | v3+ | ISO blocklisting | :material-minus: Optional |
+| **Radarr** | v3+ | Pre-air checking | :material-minus: Optional |
 | **Network** | - | Service connectivity | :material-check: Required |
 
 ---
