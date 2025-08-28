@@ -20,6 +20,7 @@ Behavior:
 
 import os, sys, json, time, signal, logging, urllib.parse as uparse
 from typing import Dict, Set, Tuple
+import urllib.error
 
 # Your class-based guard + clients
 from guard import Config, HttpClient, QbitClient, TorrentGuard
@@ -35,6 +36,29 @@ log = logging.getLogger("qbit-guard-watcher")
 POLL_SEC = float(os.getenv("WATCH_POLL_SECONDS", "3.0"))
 PROCESS_EXISTING_AT_START = os.getenv("WATCH_PROCESS_EXISTING_AT_START", "0") == "1"
 RESCAN_KEYWORD = os.getenv("WATCH_RESCAN_KEYWORD", "rescan").strip().lower()  # in category/tags -> force
+
+# Connection retry configuration
+MAX_RETRY_ATTEMPTS = int(os.getenv("QBIT_MAX_RETRY_ATTEMPTS", "5"))
+INITIAL_BACKOFF_SEC = float(os.getenv("QBIT_INITIAL_BACKOFF_SEC", "1.0"))
+MAX_BACKOFF_SEC = float(os.getenv("QBIT_MAX_BACKOFF_SEC", "60.0"))
+
+def is_connection_error(e: Exception) -> bool:
+    """Check if an exception indicates a connection problem that warrants retry."""
+    if isinstance(e, urllib.error.HTTPError):
+        # Common HTTP error codes that indicate connection/auth issues
+        return e.code in (401, 403, 500, 502, 503, 504)
+    if isinstance(e, (urllib.error.URLError, ConnectionError, OSError)):
+        return True
+    # Check for timeout and other network-related errors
+    if "timeout" in str(e).lower() or "connection" in str(e).lower():
+        return True
+    return False
+
+def exponential_backoff_sleep(attempt: int, initial_delay: float = INITIAL_BACKOFF_SEC, max_delay: float = MAX_BACKOFF_SEC) -> None:
+    """Sleep with exponential backoff, capped at max_delay."""
+    delay = min(initial_delay * (2 ** attempt), max_delay)
+    log.info("Connection failed, retrying in %.1f seconds (attempt %d/%d)", delay, attempt + 1, MAX_RETRY_ATTEMPTS)
+    time.sleep(delay)
 
 def qb_sync_maindata(http: HttpClient, cfg: Config, rid: int) -> Dict:
     url = f"{cfg.qbit_host}/api/v2/sync/maindata"
@@ -65,16 +89,27 @@ def main():
     for s in (signal.SIGINT, signal.SIGTERM):
         signal.signal(s, _sig)
 
-    # login
-    try:
-        qb.login()
-    except Exception as e:
-        log.error("qB login failed: %s", e)
+    # login with retry logic
+    def ensure_authenticated() -> bool:
+        """Ensure we're authenticated with qBittorrent, with retry logic."""
+        for attempt in range(MAX_RETRY_ATTEMPTS):
+            try:
+                qb.login()
+                return True
+            except Exception as e:
+                if not is_connection_error(e) or attempt == MAX_RETRY_ATTEMPTS - 1:
+                    log.error("qB login failed after %d attempts: %s", attempt + 1, e)
+                    return False
+                exponential_backoff_sleep(attempt)
+        return False
+
+    if not ensure_authenticated():
         sys.exit(2)
 
     seen: Set[str] = set()
     rid = 0
     first_snapshot = True
+    consecutive_failures = 0
     log.info(
         "Watcher (stateless) started. poll=%.1fs, process_existing_at_start=%s, rescan-keyword='%s'",
         POLL_SEC, PROCESS_EXISTING_AT_START, RESCAN_KEYWORD or "(disabled)"
@@ -86,6 +121,9 @@ def main():
             if not data:
                 time.sleep(POLL_SEC)
                 continue
+
+            # Reset failure counter on successful request
+            consecutive_failures = 0
 
             rid = data.get("rid", rid)
             torrents = data.get("torrents") or {}
@@ -127,7 +165,43 @@ def main():
                     seen.add(h)
 
         except Exception as e:
-            log.error("Watcher loop error: %s", e)
+            if is_connection_error(e):
+                consecutive_failures += 1
+                log.warning("Connection error (failure %d): %s", consecutive_failures, e)
+                
+                # If we've had multiple consecutive failures, attempt reconnection
+                if consecutive_failures >= 2:
+                    log.info("Multiple connection failures detected, attempting reconnection...")
+                    
+                    # Reset connection state
+                    rid = 0  # Reset request ID to start fresh
+                    first_snapshot = True  # Re-initialize snapshot state
+                    
+                    # Attempt to re-authenticate with exponential backoff
+                    reconnected = False
+                    for attempt in range(MAX_RETRY_ATTEMPTS):
+                        try:
+                            qb.login()
+                            log.info("Successfully reconnected to qBittorrent")
+                            consecutive_failures = 0
+                            reconnected = True
+                            break
+                        except Exception as auth_e:
+                            if not is_connection_error(auth_e) or attempt == MAX_RETRY_ATTEMPTS - 1:
+                                log.error("Reconnection failed after %d attempts: %s", attempt + 1, auth_e)
+                                break
+                            exponential_backoff_sleep(attempt)
+                    
+                    if not reconnected:
+                        log.error("Failed to reconnect to qBittorrent, exiting...")
+                        sys.exit(3)
+                else:
+                    # Single failure, just wait before retry
+                    exponential_backoff_sleep(0)
+            else:
+                # Non-connection error, log and continue
+                log.error("Watcher loop error: %s", e)
+                consecutive_failures = 0
 
         time.sleep(POLL_SEC)
 
