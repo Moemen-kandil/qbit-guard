@@ -1,28 +1,218 @@
 site_name: qbit-guard
 site_url: https://gengines.github.io/qbit-guard/
+site_description: A zero-dependency Python guard for qBittorrent that provides intelligent torrent management with pre-air checking and ISO/BDMV cleanup.
+site_author: GEngines
+copyright: Copyright &copy; 2024 GEngines
+
+# Repository configuration
 repo_url: https://github.com/GEngines/qbit-guard
 repo_name: GEngines/qbit-guard
+edit_uri: edit/main/docs/
 
+# Social links and metadata
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/GEngines/qbit-guard
+      name: GitHub Repository
+    - icon: fontawesome/brands/docker
+      link: https://github.com/GEngines/qbit-guard/pkgs/container/qbit-guard
+      name: Docker Registry
+  version:
+    provider: mike
+    default: stable
+
+# Theme configuration with advanced features
 theme:
   name: material
+  language: en
+  
+  # Color palette with dark/light mode toggle
+  palette:
+    # Palette toggle for automatic mode
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+    
+    # Palette toggle for light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: blue
+      accent: blue
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    
+    # Palette toggle for dark mode  
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: blue
+      accent: blue
+      toggle:
+        icon: material/brightness-4
+        name: Switch to system preference
+
+  # Advanced navigation and interaction features
   features:
+    # Navigation enhancements
     - navigation.instant
+    - navigation.instant.prefetch
+    - navigation.instant.progress
+    - navigation.tracking
+    - navigation.tabs
     - navigation.sections
+    - navigation.expand
+    - navigation.prune
+    - navigation.path
+    - navigation.indexes
+    - navigation.top
+    
+    # Table of contents enhancements
+    - toc.follow
+    - toc.integrate
+    
+    # Search enhancements
     - search.suggest
     - search.highlight
+    - search.share
+    
+    # Header features
+    - header.autohide
+    
+    # Content features
+    - content.action.edit
+    - content.action.view
+    - content.code.copy
+    - content.code.select
+    - content.tabs.link
+    - content.tooltips
 
+  # Icons and logos
+  icon:
+    repo: fontawesome/brands/github
+    edit: material/pencil
+    view: material/eye
+    
+# Enhanced navigation structure
 nav:
   - Home: index.md
-  - Usage:
-      - Install: usage/install.md
-      - Configure: usage/configure.md
-      - Environment Vars: usage/env.md
+  - Getting Started:
+      - Installation: usage/install.md
+      - Quick Start: usage/configure.md
+      - Environment Variables: usage/env.md
+  - Configuration:
+      - Examples: examples.md
       - Development: usage/dev.md
-  - Examples: examples.md
-  - Troubleshooting: troubleshooting.md
+  - Support:
+      - Troubleshooting: troubleshooting.md
 
+# Plugins for enhanced functionality
+plugins:
+  - search:
+      separator: '[\s\u200b\-_,:!=\[\]()"`/]+|\.(?!\d)|&[lg]t;|(?!\b)(?=[A-Z][a-z])'
+      
+  - awesome-pages
+  
+  - git-revision-date-localized:
+      enabled: !ENV [CI, false]
+      type: datetime
+      timezone: UTC
+      locale: en
+      fallback_to_build_date: true
+      enable_creation_date: true
+      exclude:
+        - index.md
+        
+  - git-authors:
+      enabled: !ENV [CI, false]
+      show_contribution: true
+      show_line_count: true
+      show_email_address: false
+      count_empty_lines: false
+      fallback_to_empty: false
+      sort_authors_by: contribution
+      authorship_threshold_percent: 10
+      exclude:
+        - index.md
+        
+  - minify:
+      minify_html: true
+      minify_js: true
+      minify_css: true
+      htmlmin_opts:
+        remove_comments: true
+        remove_empty_space: true
+        remove_all_empty_space: false
+        reduce_boolean_attributes: true
+      cache_safe: true
+
+# Advanced markdown extensions
 markdown_extensions:
+  # Python Markdown core extensions
+  - abbr
   - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - meta
+  - tables
   - toc:
       permalink: true
-  - codehilite
+      permalink_title: Anchor link to this section
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
+      toc_depth: 3
+
+  # PyMdown Extensions
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+      use_pygments: true
+      auto_title: true
+      linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.magiclink:
+      normalize_issue_symbols: true
+      repo_url_shorthand: true
+      user: GEngines
+      repo: qbit-guard
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.snippets:
+      check_paths: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+      combine_header_slug: true
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+
+# Additional CSS and JavaScript
+extra_css:
+  - https://unpkg.com/katex@0/dist/katex.min.css
+
+extra_javascript:
+  - https://unpkg.com/katex@0/dist/katex.min.js
+  - https://unpkg.com/katex@0/dist/contrib/auto-render.min.js

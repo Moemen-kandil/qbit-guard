@@ -2,62 +2,132 @@
 
 This guide covers common issues, debugging techniques, and solutions for qbit-guard deployment and operation.
 
+!!! warning "Before You Start"
+    Always check the logs first: `docker-compose logs qbit-guard` or `kubectl logs deployment/qbit-guard`
+
 ---
 
-## Container Issues
+## :warning: Container Issues
 
 ### Container Fails to Start
 
-**Symptoms**: Container exits immediately or fails to start
+!!! bug "Symptoms"
+    Container exits immediately or fails to start
 
-```bash
-# Check container logs
-docker-compose logs qbit-guard
-```
+=== "Diagnosis"
 
-**Common causes**:
-- Invalid environment variables (check `QBIT_HOST`, credentials)
-- Network connectivity issues between containers  
-- Missing required environment variables (`SONARR_APIKEY`, etc.)
+    ```bash
+    # Check container logs
+    docker-compose logs qbit-guard
+    
+    # Check container status
+    docker-compose ps qbit-guard
+    
+    # Inspect environment variables
+    docker-compose exec qbit-guard env | grep QBIT_
+    ```
 
-**Solutions**:
-1. Verify all required environment variables are set
-2. Check `QBIT_HOST` is accessible from the container
-3. Ensure qBittorrent WebUI is enabled and reachable
-4. Validate API keys for Sonarr/Radarr
+=== "Common Causes"
+
+    - :x: Invalid environment variables (check `QBIT_HOST`, credentials)
+    - :x: Network connectivity issues between containers  
+    - :x: Missing required environment variables (`SONARR_APIKEY`, etc.)
+    - :x: qBittorrent WebUI not enabled or accessible
+
+=== "Solutions"
+
+    1. **Verify all required environment variables are set**
+       ```bash
+       # Check essential variables
+       echo $QBIT_HOST $QBIT_USER $QBIT_PASS $QBIT_ALLOWED_CATEGORIES
+       ```
+
+    2. **Test qBittorrent connectivity**
+       ```bash
+       curl -v http://your-qbittorrent-host:8080/api/v2/app/version
+       ```
+
+    3. **Enable qBittorrent WebUI**: Options → Web UI → Enable
+    
+    4. **Validate API keys** for Sonarr/Radarr in their respective settings
 
 ### qbit-guard Cannot Connect to qBittorrent
 
-**Symptoms**: `qB: login failed` or connection timeouts
+!!! bug "Symptoms" 
+    Log messages: `qB: login failed` or connection timeouts
 
-```bash
-# Verify qBittorrent is accessible from qbit-guard container
-docker-compose exec qbit-guard wget -qO- http://qbittorrent:8080/api/v2/app/version
+=== "Network Diagnosis"
 
-# Check network configuration
-docker-compose exec qbit-guard nslookup qbittorrent
+    ```bash
+    # Test from qbit-guard container to qBittorrent
+    docker-compose exec qbit-guard wget -qO- http://qbittorrent:8080/api/v2/app/version
+    
+    # Check DNS resolution
+    docker-compose exec qbit-guard nslookup qbittorrent
+    
+    # Test direct IP connection
+    docker-compose exec qbit-guard curl -v http://IP:8080/api/v2/app/version
+    ```
 
-# Verify credentials and ports match qBittorrent WebUI settings
-```
+=== "Authentication Check"
 
-**Solutions**:
-1. Check `QBIT_HOST` URL format: `http://qbittorrent:8080`
-2. Verify `QBIT_USER` and `QBIT_PASS` match WebUI credentials
-3. Ensure qBittorrent WebUI is enabled (Options → Web UI)
-4. Check firewall/network connectivity between containers
+    ```bash
+    # Manual login test
+    curl -c cookies.txt -d "username=admin&password=your_pass" \
+         http://qbittorrent:8080/api/v2/auth/login
+    
+    # Verify WebUI credentials match container environment
+    docker-compose exec qbit-guard printenv | grep QBIT_
+    ```
+
+=== "Solutions"
+
+    !!! success "Fix Steps"
+        1. **URL Format**: Ensure `QBIT_HOST=http://qbittorrent:8080` (not https unless configured)
+        2. **Credentials**: Verify `QBIT_USER` and `QBIT_PASS` match WebUI settings exactly
+        3. **WebUI Settings**: qBittorrent Options → Web UI → Enable Web User Interface
+        4. **Network**: Ensure containers are on the same Docker network
+        5. **Firewall**: Check if host firewall is blocking container communication
 
 ### No Torrents Being Processed
 
-**Symptoms**: Container runs but doesn't process any torrents
+!!! bug "Symptoms"
+    Container runs but doesn't process any torrents
 
-```bash
-# Check if torrents are in allowed categories
-docker-compose exec qbit-guard printenv QBIT_ALLOWED_CATEGORIES
+=== "Category Check"
 
-# Enable debug logging for detailed information  
-docker-compose up -d --environment LOG_LEVEL=DEBUG qbit-guard
+    ```bash
+    # Verify allowed categories match qBittorrent categories
+    docker-compose exec qbit-guard printenv QBIT_ALLOWED_CATEGORIES
+    
+    # List actual categories in qBittorrent
+    curl -b cookies.txt http://qbittorrent:8080/api/v2/torrents/categories
+    ```
 
-# Verify polling is working
+=== "Debug Logging"
+
+    ```bash
+    # Enable debug logging temporarily
+    docker-compose up -d -e LOG_LEVEL=DEBUG qbit-guard
+    
+    # Watch logs in real-time
+    docker-compose logs -f qbit-guard
+    
+    # Check polling activity
+    grep "Polling" docker-compose logs qbit-guard
+    ```
+
+=== "Solutions"
+
+    !!! tip "Common Fixes"
+        - **Categories**: Ensure `QBIT_ALLOWED_CATEGORIES` exactly matches qBittorrent category names
+        - **New Torrents**: Add a new torrent to an allowed category and watch logs
+        - **Existing Torrents**: Set `WATCH_PROCESS_EXISTING_AT_START=1` to process existing torrents
+        - **Polling**: Verify `WATCH_POLL_SECONDS` is not set too high (default: 3.0)
+
+---
+
+## :gear: API & Integration Issues
 docker-compose logs -f qbit-guard | grep "Watcher.*started"
 ```
 
