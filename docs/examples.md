@@ -1,4 +1,4 @@
-# Configuration Examples
+# <img alt="qbit-guard logo" src="img/qbit-guard-icon.png"> Configuration Examples
 
 This page provides working examples of qbit-guard configurations for different deployment scenarios and use cases.
 
