@@ -1,4 +1,4 @@
-# <img alt="qbit-guard logo" src="img/qbit-guard-icon.png"> Troubleshooting Guide
+# <img alt="qbit-guard logo" src="https://gengines.github.io/qbit-guard/img/qbit-guard-icon.png"> Troubleshooting Guide
 
 This guide covers common issues, debugging techniques, and solutions for qbit-guard deployment and operation.
 
