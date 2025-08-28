@@ -140,18 +140,35 @@ For users who prefer the traditional webhook approach or need to customize the d
 
    **Windows (PowerShell):**
    ```powershell
-   # Create the scripts directory if it doesn't exist
-   New-Item -ItemType Directory -Force -Path "C:\qbit-guard\scripts"
+   # Create the scripts directory in user profile
+   New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\qbit-guard\scripts"
    
    # Download the script
-   Invoke-WebRequest -Uri "https://raw.githubusercontent.com/GEngines/qbit-guard/main/src/guard.py" -OutFile "C:\qbit-guard\scripts\qbit-guard.py"
+   Invoke-WebRequest -Uri "https://raw.githubusercontent.com/GEngines/qbit-guard/main/src/guard.py" -OutFile "$env:USERPROFILE\qbit-guard\scripts\qbit-guard.py"
    ```
 
    **Windows (Command Prompt with curl):**
    ```cmd
-   mkdir "C:\qbit-guard\scripts" 2>nul
-   curl -o "C:\qbit-guard\scripts\qbit-guard.py" https://raw.githubusercontent.com/GEngines/qbit-guard/main/src/guard.py
+   mkdir "%USERPROFILE%\qbit-guard\scripts" 2>nul
+   curl -o "%USERPROFILE%\qbit-guard\scripts\qbit-guard.py" https://raw.githubusercontent.com/GEngines/qbit-guard/main/src/guard.py
    ```
+
+   **Manual Download (All Platforms):**
+   
+   If you prefer to download manually or the above commands don't work:
+   
+   1. **Create the directory structure**:
+      - **Linux/macOS**: `/config/scripts/`
+      - **Windows**: `%USERPROFILE%\qbit-guard\scripts\` (typically `C:\Users\YourUsername\qbit-guard\scripts\`)
+   
+   2. **Download the script file**:
+      - Open [https://raw.githubusercontent.com/GEngines/qbit-guard/main/src/guard.py](https://raw.githubusercontent.com/GEngines/qbit-guard/main/src/guard.py) in your browser
+      - Right-click → "Save As..." and save the file as `qbit-guard.py` in the directory you created above
+   
+   3. **Linux/macOS only**: Make the script executable:
+      ```bash
+      chmod +x /config/scripts/qbit-guard.py
+      ```
 
 2. **Configure qBittorrent**:
    - Navigate to **Options** → **Downloads** → **Run external program**
@@ -164,12 +181,12 @@ For users who prefer the traditional webhook approach or need to customize the d
      
      **Windows:**
      ```cmd
-     python "C:\qbit-guard\scripts\qbit-guard.py" %I %L
+     python "%USERPROFILE%\qbit-guard\scripts\qbit-guard.py" %I %L
      ```
      
      > **Note for Windows**: Use the full path to python.exe if `python` command is not in PATH:
      > ```cmd
-     > "C:\Python39\python.exe" "C:\qbit-guard\scripts\qbit-guard.py" %I %L
+     > "C:\Python39\python.exe" "%USERPROFILE%\qbit-guard\scripts\qbit-guard.py" %I %L
      > ```
    
    - **Important**: Remove any existing "Run on torrent added" scripts to avoid conflicts
