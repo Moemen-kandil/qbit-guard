@@ -57,7 +57,8 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          # Use the PAT instead of GITHUB_TOKEN
+          password: ${{ secrets.GHCR_PAT }}
 
       - name: Docker metadata
         id: meta
@@ -73,13 +74,27 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
             type=ref,event=branch
             type=sha
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.title=${{ env.IMAGE_NAME }}
+
+      # Ensure latest tag is always applied for pushes to main branch
+      - name: Add latest tag explicitly
+        if: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+        run: |
+          echo "Will ensure 'latest' tag is included for main branch push"
+          TAGS="${{ steps.meta.outputs.tags }}"
+          if [[ "$TAGS" != *":latest"* ]]; then
+            echo "Adding latest tag explicitly to tags list"
+            echo "tags=$TAGS,${{ steps.names.outputs.image }}:latest" >> $GITHUB_ENV
+          else
+            echo "Latest tag already included in metadata output"
+            echo "tags=$TAGS" >> $GITHUB_ENV
+          fi
 
       - name: Build & (conditionally) push
         uses: docker/build-push-action@v6
@@ -88,7 +103,7 @@ jobs:
           file: ./Dockerfile
           platforms: linux/amd64,linux/arm64
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: ${{ env.tags || steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
