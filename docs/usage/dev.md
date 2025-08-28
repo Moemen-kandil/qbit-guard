@@ -1,4 +1,4 @@
-# <img alt="qbit-guard logo" src="../../img/qbit-guard-icon.png"> Development Guide
+# <img alt="qbit-guard logo" src="https://gengines.github.io/qbit-guard/img/qbit-guard-icon.png"> Development Guide
 
 This guide covers development setup, testing procedures, debugging techniques, and troubleshooting for qbit-guard.
 
