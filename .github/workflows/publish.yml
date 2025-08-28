@@ -26,6 +26,10 @@ on:
           - patch
           - minor
           - major
+      custom_version:
+        description: "Optional specific version to use (e.g. 2.0.0) - overrides increment type"
+        required: false
+        type: string
 
 permissions:
   contents: write  # needed for version tag creation
@@ -38,14 +42,16 @@ concurrency:
 env:
   # Set your image name here (lowercase). If you prefer the repo name, set to ${{ github.event.repository.name }}.
   IMAGE_NAME: qbit-guard
+  # Current date in ISO format for reference
+  CURRENT_DATE: '2025-08-28'
 
 jobs:
   version:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/')
     outputs:
-      new_version: ${{ steps.increment.outputs.new_version }}
-      new_tag: ${{ steps.increment.outputs.new_tag }}
+      new_version: ${{ steps.version_info.outputs.new_version }}
+      new_tag: ${{ steps.version_info.outputs.new_tag }}
       
     steps:
       - name: Checkout
@@ -53,13 +59,51 @@ jobs:
         with:
           fetch-depth: 0
       
+      - name: Check for custom version
+        id: check_custom
+        run: |
+          if [ -n "${{ github.event.inputs.custom_version }}" ]; then
+            echo "Using custom version: ${{ github.event.inputs.custom_version }}"
+            echo "use_custom=true" >> $GITHUB_OUTPUT
+            echo "custom_version=${{ github.event.inputs.custom_version }}" >> $GITHUB_OUTPUT
+            
+            # Check if custom version starts with 'v'
+            if [[ "${{ github.event.inputs.custom_version }}" == v* ]]; then
+              echo "custom_tag=${{ github.event.inputs.custom_version }}" >> $GITHUB_OUTPUT
+            else
+              echo "custom_tag=v${{ github.event.inputs.custom_version }}" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "No custom version specified, will use version increment"
+            echo "use_custom=false" >> $GITHUB_OUTPUT
+          fi
+      
       - name: Increment version and push tag
-        id: increment
+        id: tag_version
+        if: steps.check_custom.outputs.use_custom != 'true'
         uses: anothrNick/github-tag-action@1.64.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           WITH_V: true
-          DEFAULT_BUMP: ${{ github.event_name == 'workflow_dispatch' && inputs.version_increment || 'patch' }}
+          DEFAULT_BUMP: ${{ github.event.inputs.version_increment || 'patch' }}
+      
+      - name: Create custom version tag
+        if: steps.check_custom.outputs.use_custom == 'true'
+        run: |
+          echo "Creating custom version tag: ${{ steps.check_custom.outputs.custom_tag }}"
+          git tag ${{ steps.check_custom.outputs.custom_tag }}
+          git push origin ${{ steps.check_custom.outputs.custom_tag }}
+      
+      - name: Set version output
+        id: version_info
+        run: |
+          if [ "${{ steps.check_custom.outputs.use_custom }}" == "true" ]; then
+            echo "new_tag=${{ steps.check_custom.outputs.custom_tag }}" >> $GITHUB_OUTPUT
+            echo "new_version=${{ steps.check_custom.outputs.custom_version }}" >> $GITHUB_OUTPUT
+          else
+            echo "new_tag=${{ steps.tag_version.outputs.new_tag }}" >> $GITHUB_OUTPUT
+            echo "new_version=${{ steps.tag_version.outputs.new_version }}" >> $GITHUB_OUTPUT
+          fi
           
   docker:
     runs-on: ubuntu-latest
