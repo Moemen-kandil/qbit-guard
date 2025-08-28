@@ -15,7 +15,7 @@ version: '3.8'
 
 services:
   qbit-guard:
-    image: ghcr.io/gengines/qbit-guard:1.0.0
+    image: ghcr.io/gengines/qbit-guard:latest
     container_name: qbit-guard
     restart: unless-stopped
     environment:
@@ -90,7 +90,7 @@ version: '3.8'
 
 services:
   qbit-guard:
-    image: ghcr.io/gengines/qbit-guard:1.0.0
+    image: ghcr.io/gengines/qbit-guard:latest
     container_name: qbit-guard
     restart: unless-stopped
     environment:
@@ -310,7 +310,7 @@ spec:
     spec:
       containers:
       - name: qbit-guard
-        image: ghcr.io/gengines/qbit-guard:1.0.0
+        image: ghcr.io/gengines/qbit-guard:latest
         envFrom:
         - configMapRef:
             name: qbit-guard-config
@@ -486,14 +486,14 @@ Run separate qbit-guard instances for different qBittorrent servers:
 ```yaml
 services:
   qbit-guard-main:
-    image: ghcr.io/gengines/qbit-guard:1.0.0
+    image: ghcr.io/gengines/qbit-guard:latest
     environment:
       - QBIT_HOST=http://qbittorrent-main:8080
       - QBIT_ALLOWED_CATEGORIES=tv-sonarr,radarr
       # ... other config
 
   qbit-guard-4k:
-    image: ghcr.io/gengines/qbit-guard:1.0.0
+    image: ghcr.io/gengines/qbit-guard:latest
     environment:
       - QBIT_HOST=http://qbittorrent-4k:8080
       - QBIT_ALLOWED_CATEGORIES=tv-4k,movies-4k

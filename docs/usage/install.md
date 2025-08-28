@@ -19,7 +19,7 @@ The containerized version runs as a standalone service that continuously monitor
 
 1. **Pull the official image**:
    ```bash
-   docker pull ghcr.io/gengines/qbit-guard:1.0.0
+   docker pull ghcr.io/gengines/qbit-guard:latest
    ```
 
 2. **Create a basic docker-compose.yml**:
@@ -27,7 +27,7 @@ The containerized version runs as a standalone service that continuously monitor
    version: '3.8'
    services:
      qbit-guard:
-       image: ghcr.io/gengines/qbit-guard:1.0.0
+       image: ghcr.io/gengines/qbit-guard:latest
        container_name: qbit-guard
        restart: unless-stopped
        environment:

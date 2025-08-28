@@ -60,7 +60,7 @@ A zero-dependency Python guard for qBittorrent that provides intelligent torrent
 version: '3.8'
 services:
   qbit-guard:
-    image: ghcr.io/gengines/qbit-guard:1.0.0
+    image: ghcr.io/gengines/qbit-guard:latest
     container_name: qbit-guard
     restart: unless-stopped
     environment:
