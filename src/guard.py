@@ -809,8 +809,7 @@ class IsoCleaner:
         disc_pat = r'\.(' + '|'.join(sorted(map(re.escape, self.cfg.disc_exts))) + r')$'
         self.disc_re = re.compile(disc_pat, re.I)
 
-    @staticmethod
-    def _is_disc_path(name: str) -> bool:
+    def _is_disc_path(self, name: str) -> bool:
         n = (name or "").replace("\\","/").lower()
         return bool(self.disc_re.search(n) or "/bdmv/" in n or "/video_ts/" in n)
 
