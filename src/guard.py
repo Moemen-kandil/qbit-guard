@@ -812,7 +812,7 @@ class IsoCleaner:
     @staticmethod
     def _is_disc_path(name: str) -> bool:
         n = (name or "").replace("\\","/").lower()
-        return bool(IsoCleaner.disc_re.search(n) or "/bdmv/" in n or "/video_ts/" in n)
+        return bool(self.disc_re.search(n) or "/bdmv/" in n or "/video_ts/" in n)
 
     def has_keepable_video(self, files: Sequence[Dict[str, Any]]) -> bool:
         for f in files:
