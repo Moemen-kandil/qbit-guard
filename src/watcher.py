@@ -24,6 +24,7 @@ import urllib.error
 
 # Your class-based guard + clients
 from guard import Config, HttpClient, QbitClient, TorrentGuard
+from version import VERSION
 
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(
@@ -31,7 +32,17 @@ logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(message)s",
     stream=sys.stdout,
 )
+
+# Create a filter to add version to all log records
+class VersionFilter(logging.Filter):
+    def filter(self, record):
+        record.version = VERSION
+        return True
+
+
 log = logging.getLogger("qbit-guard-watcher")
+log.addFilter(VersionFilter())
+
 
 POLL_SEC = float(os.getenv("WATCH_POLL_SECONDS", "3.0"))
 PROCESS_EXISTING_AT_START = os.getenv("WATCH_PROCESS_EXISTING_AT_START", "0") == "1"

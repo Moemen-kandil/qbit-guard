@@ -43,7 +43,7 @@ env:
   # Set your image name here (lowercase). If you prefer the repo name, set to ${{ github.event.repository.name }}.
   IMAGE_NAME: qbit-guard
   # Current date in ISO format for reference
-  CURRENT_DATE: '2025-08-28'
+  CURRENT_DATE: '2025-08-29'
 
 jobs:
   version:
@@ -147,9 +147,36 @@ jobs:
             fi
             echo "version=$VERSION" >> $GITHUB_OUTPUT
             echo "has_new_version=true" >> $GITHUB_OUTPUT
+            
+            # Check if version contains "dev" and set flag
+            if [[ "$VERSION" == *"dev"* ]]; then
+              echo "is_dev_version=true" >> $GITHUB_OUTPUT
+            else
+              echo "is_dev_version=false" >> $GITHUB_OUTPUT
+            fi
           else
-            echo "No new version generated, using existing tags"
+            echo "No new version generated, checking if current tag contains dev"
+            if [[ "${{ github.ref_name }}" == *"dev"* ]]; then
+              echo "is_dev_version=true" >> $GITHUB_OUTPUT
+            else
+              echo "is_dev_version=false" >> $GITHUB_OUTPUT
+            fi
             echo "has_new_version=false" >> $GITHUB_OUTPUT
+          fi
+
+      # Pass BUILD_VERSION to Docker build
+      - name: Set build args
+        id: build_args
+        run: |
+          if [ "${{ steps.version_tag.outputs.has_new_version }}" == "true" ]; then
+            echo "build_version=${{ steps.version_tag.outputs.version }}" >> $GITHUB_OUTPUT
+          else
+            # For tag pushes, use the tag name without the 'v' prefix
+            VERSION="${{ github.ref_name }}"
+            if [[ "$VERSION" == v* ]]; then
+              VERSION="${VERSION:1}"
+            fi
+            echo "build_version=$VERSION" >> $GITHUB_OUTPUT
           fi
 
       - name: Docker metadata
@@ -162,7 +189,8 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
-            type=raw,value=latest
+            ${{ steps.version_tag.outputs.is_dev_version != 'true' && 'type=raw,value=latest' || '' }}
+            ${{ steps.version_tag.outputs.is_dev_version == 'true' && 'type=raw,value=dev' || '' }}
             type=ref,event=branch
             type=sha
             ${{ steps.version_tag.outputs.has_new_version == 'true' && format('type=raw,value={0}', steps.version_tag.outputs.version) || '' }}
@@ -183,6 +211,8 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_VERSION=${{ steps.build_args.outputs.build_version }}
 
       - name: Push extra tag (from workflow_dispatch)
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.extra_tag != '' }}
