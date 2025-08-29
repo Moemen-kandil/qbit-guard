@@ -25,7 +25,7 @@ import urllib.parse as uparse
 import urllib.request as ureq
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Set
-
+from .version import VERSION
 # --------------------------- Logging ---------------------------
 
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -35,7 +35,7 @@ logging.basicConfig(
     stream=sys.stdout,
 )
 log = logging.getLogger("qbit-guard")
-
+log.info(f"qbit-guard starting - version: {VERSION}")
 
 # --------------------------- Helpers (extensions) ---------------------------
 
